@@ -929,6 +929,10 @@ body.is-resizing-layout * {
   user-select: none;
 }
 
+.tab-card.is-collapsed .field-grid {
+  display: none;
+}
+
 @media (max-width: 1120px) {
   .layout-panel {
     grid-template-columns: 1fr;

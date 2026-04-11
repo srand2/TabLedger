@@ -49,7 +49,8 @@ const state = {
   settings: { ...DEFAULT_SETTINGS },
   settingsOpen: false,
   aiRequestTokens: {},
-  aiStatuses: {}
+  aiStatuses: {},
+  expandedTabIds: new Set()
 };
 
 const elements = {
@@ -215,6 +216,7 @@ async function scanTabs() {
     state.lastScannedAt = new Date().toISOString();
     state.collapsedCategories = getAllCategoryNames(state.items);
     resetAiState();
+    state.expandedTabIds = new Set();
 
     if (!state.sessionName.trim()) {
       state.sessionName = buildDefaultSessionName();
@@ -449,6 +451,8 @@ function renderTabItem(item) {
   const tagsInput = tabNode.querySelector(".item-tags-input");
   const descriptionInput = tabNode.querySelector(".item-description-input");
   const summaryInput = tabNode.querySelector(".item-summary-input");
+  const expandToggle = tabNode.querySelector(".tab-expand-toggle");
+  const expandGlyph = expandToggle.querySelector(".toggle-glyph");
   const currentAiStatus = state.aiStatuses[item.id];
   const isAiLoading = Boolean(state.aiRequestTokens[item.id]);
 
@@ -462,6 +466,38 @@ function renderTabItem(item) {
   tagsInput.value = item.tags.join(", ");
   descriptionInput.value = item.description;
   summaryInput.value = item.summary;
+
+  const isInitiallyExpanded = state.expandedTabIds.has(item.id);
+  if (!isInitiallyExpanded) {
+    tabNode.classList.add("is-collapsed");
+  } else {
+    expandToggle.setAttribute("aria-expanded", "true");
+    expandToggle.setAttribute("aria-label", "Collapse tab fields");
+    expandGlyph.textContent = "▾";
+  }
+
+  expandToggle.addEventListener("click", () => {
+    const isNowCollapsed = tabNode.classList.toggle("is-collapsed");
+    const expanded = !isNowCollapsed;
+    if (expanded) {
+      state.expandedTabIds.add(item.id);
+    } else {
+      state.expandedTabIds.delete(item.id);
+    }
+    expandToggle.setAttribute("aria-expanded", String(expanded));
+    expandToggle.setAttribute("aria-label", expanded ? "Collapse tab fields" : "Expand tab fields");
+    expandGlyph.textContent = expanded ? "▾" : "▸";
+  });
+
+  tabNode.querySelector(".field-grid").addEventListener("focusin", () => {
+    if (tabNode.classList.contains("is-collapsed")) {
+      tabNode.classList.remove("is-collapsed");
+      state.expandedTabIds.add(item.id);
+      expandToggle.setAttribute("aria-expanded", "true");
+      expandToggle.setAttribute("aria-label", "Collapse tab fields");
+      expandGlyph.textContent = "▾";
+    }
+  });
 
   if (currentAiStatus?.message) {
     aiStatus.hidden = false;
