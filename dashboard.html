@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TabLedger Workspace</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell dashboard-shell">
+      <section class="hero-card">
+        <div class="hero-top-row">
+          <div class="brand-lockup">
+            <div class="brand-mark" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+            <div>
+              <p class="eyebrow">From tab chaos to structured knowledge</p>
+              <h1>TabLedger</h1>
+            </div>
+          </div>
+          <div class="settings-shell">
+            <button
+              id="settings-toggle"
+              class="ghost-button settings-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="settings-panel"
+              aria-label="Open settings"
+            >
+              <span class="settings-toggle-icon" aria-hidden="true">⚙</span>
+            </button>
+            <section id="settings-panel" class="settings-panel" hidden>
+              <p class="eyebrow">Settings</p>
+              <h3>Save Rules</h3>
+              <label class="settings-option">
+                <input id="dedupe-within-session" type="checkbox" />
+                <span>
+                  <strong>Deduplicate in this session</strong>
+                  <small>Skip repeated URLs inside the current draft when saving.</small>
+                </span>
+              </label>
+              <label class="settings-option">
+                <input id="dedupe-across-sessions" type="checkbox" />
+                <span>
+                  <strong>Deduplicate across the library</strong>
+                  <small>Skip URLs that already exist in saved Browsing Library sessions.</small>
+                </span>
+              </label>
+            </section>
+          </div>
+        </div>
+<div class="hero-actions">
+          <button id="scan-all" class="primary-button">Capture All Windows</button>
+          <button id="save-bookmarks" class="ghost-button" disabled>
+            Save to Library
+          </button>
+          <button id="export-json" class="ghost-button" disabled>
+            Export JSON
+          </button>
+        </div>
+      </section>
+
+      <section class="panel controls-panel">
+        <div class="session-row">
+          <label class="field">
+            <span>Session name</span>
+            <input
+              id="session-name"
+              type="text"
+              placeholder="Incident review, research batch, sprint planning..."
+            />
+          </label>
+          <label class="field compact-search">
+            <span>Filter</span>
+            <input
+              id="filter-query"
+              type="text"
+              placeholder="Search by title, URL, tag, or summary"
+            />
+          </label>
+          <div class="summary-strip">
+            <div>
+              <strong id="tab-count">0</strong>
+              <span>tabs</span>
+            </div>
+            <div>
+              <strong id="category-count">0</strong>
+              <span>categories</span>
+            </div>
+            <div>
+              <strong id="skipped-count">0</strong>
+              <span>skipped</span>
+            </div>
+          </div>
+        </div>
+        <div class="toolbar-row">
+          <p class="panel-note">
+            Native bookmarks store title and URL. Category details, summaries,
+            tags, and library mappings stay in extension storage as the source of truth.
+          </p>
+          <button id="reset-draft" class="ghost-button" disabled>Clear Draft</button>
+        </div>
+        <p id="status-message" class="status-message" aria-live="polite"></p>
+      </section>
+
+      <section id="layout-panel" class="panel layout-panel">
+        <div id="draft-pane" class="draft-column">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Draft</p>
+              <h2>Tab Ledger</h2>
+            </div>
+            <div class="draft-actions">
+              <button id="toggle-draft-collapse" class="ghost-button small-button" type="button" disabled>
+                Expand All
+              </button>
+              <button id="bulk-fill-ai" class="ghost-button small-button draft-ai-button" type="button">
+                <span class="tab-ai-icon" aria-hidden="true">✦</span>
+                <span>Use AI</span>
+              </button>
+            </div>
+          </div>
+          <div id="categories" class="category-list">
+            <div class="empty-state">
+              <h3>No draft yet</h3>
+              <p>
+                Capture all open windows to generate a working draft. Then review each tab,
+                its category, description, summary, and tags before saving.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div
+          id="layout-resizer"
+          class="layout-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize Browsing Library panel"
+          aria-controls="library-pane"
+          tabindex="0"
+        >
+          <span class="layout-resizer-grip" aria-hidden="true"></span>
+        </div>
+
+        <aside id="library-pane" class="history-column">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Browsing Library</p>
+              <h2>Library Explorer</h2>
+            </div>
+          </div>
+          <label class="field archive-search">
+            <span>Library Filter</span>
+            <input
+              id="archive-filter"
+              type="text"
+              placeholder="Search the library or click tags and categories to filter"
+            />
+          </label>
+          <div id="archive-active-filters" class="archive-active-filters" hidden></div>
+          <div id="archive-summary" class="archive-summary">
+            <p class="history-meta">Saved sessions will appear here after you add them to the Browsing Library.</p>
+          </div>
+          <div id="recent-archives" class="history-list">
+            <div class="empty-state compact-empty">
+              <h3>No library entries yet</h3>
+              <p>Save a session to the Browsing Library so you can reopen those tabs later.</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <template id="category-template">
+      <article class="category-card">
+        <div class="category-header">
+          <button class="category-toggle" type="button" aria-expanded="true">
+            <span class="toggle-glyph" aria-hidden="true">▾</span>
+          </button>
+          <label class="field compact-field">
+            <span>Tab</span>
+            <input class="category-name-input" type="text" />
+          </label>
+          <span class="category-pill item-count-pill"></span>
+        </div>
+        <div class="tab-items"></div>
+      </article>
+    </template>
+
+    <template id="tab-template">
+      <article class="tab-card">
+        <div class="tab-title-row">
+          <div class="tab-heading-copy">
+            <h3 class="tab-title"></h3>
+            <a class="tab-link" target="_blank" rel="noreferrer"></a>
+          </div>
+          <div class="tab-meta-actions">
+            <span class="hostname-pill"></span>
+            <button class="ghost-button small-button tab-ai-button" type="button">
+              <span class="tab-ai-icon" aria-hidden="true">✦</span>
+              <span>Fill with AI</span>
+            </button>
+          </div>
+        </div>
+        <p class="tab-ai-status" aria-live="polite" hidden></p>
+        <div class="tab-chip-row"></div>
+        <div class="field-grid">
+          <label class="field compact-field">
+            <span>Assigned Category</span>
+            <input class="item-category-input" type="text" />
+          </label>
+          <label class="field compact-field">
+            <span>Tags</span>
+            <input
+              class="item-tags-input"
+              type="text"
+              placeholder="research, docs, shopping"
+            />
+          </label>
+          <label class="field full-width">
+            <span>Description</span>
+            <input
+              class="item-description-input"
+              type="text"
+              placeholder="Why this tab is worth keeping"
+            />
+          </label>
+          <label class="field full-width">
+            <span>Summary</span>
+            <textarea
+              class="item-summary-input"
+              rows="3"
+              placeholder="Short summary for later retrieval"
+            ></textarea>
+          </label>
+        </div>
+      </article>
+    </template>
+
+    <template id="history-template">
+      <article class="history-card">
+        <div class="history-top-row">
+          <div class="history-session-main">
+            <button class="history-session-toggle" type="button" aria-expanded="true">
+              <span class="toggle-glyph" aria-hidden="true">▾</span>
+            </button>
+            <div class="history-heading">
+              <h3 class="history-title"></h3>
+              <p class="history-meta"></p>
+            </div>
+          </div>
+          <span class="category-pill history-count"></span>
+        </div>
+        <div class="history-actions">
+          <button class="ghost-button small-button history-open-session" type="button">
+            Open Session
+          </button>
+          <button class="ghost-button danger-button small-button history-delete-session" type="button">
+            Delete Session
+          </button>
+        </div>
+        <div class="history-item-list"></div>
+      </article>
+    </template>
+
+    <script src="dashboard.js"></script>
+  </body>
+</html>
