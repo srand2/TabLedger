@@ -5,13 +5,15 @@ const BOOKMARK_METADATA_KEY = "bookmarkMetadata";
 const SAVED_SESSIONS_KEY = "savedSessions";
 const LIBRARY_WIDTH_KEY = "libraryExplorerWidth";
 const SETTINGS_KEY = "tabLedgerSettings";
-const AI_FILL_ENDPOINT = "http://127.0.0.1:4317/v1/fill-tab";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const DEFAULT_LIBRARY_WIDTH = 420;
 const MIN_LIBRARY_WIDTH = 340;
 const MAX_LIBRARY_WIDTH = 720;
 const MIN_DRAFT_WIDTH = 420;
 const STACKED_LAYOUT_BREAKPOINT = 1120;
 const RESIZER_STEP = 24;
+const CATEGORY_MATCH_SHORTLIST_LIMIT = 8;
+const MAX_EXISTING_CATEGORY_CONTEXT = 60;
 const FIELD_SOURCES = {
   heuristic: "heuristic",
   ai: "ai",
@@ -24,7 +26,9 @@ const capabilities = {
 };
 const DEFAULT_SETTINGS = {
   dedupeWithinSession: false,
-  dedupeAcrossSessions: false
+  dedupeAcrossSessions: false,
+  geminiApiKey: "",
+  geminiModel: DEFAULT_GEMINI_MODEL
 };
 
 const state = {
@@ -50,7 +54,8 @@ const state = {
   settingsOpen: false,
   aiRequestTokens: {},
   aiStatuses: {},
-  expandedTabIds: new Set()
+  expandedTabIds: new Set(),
+  geminiApiKeyVisible: false
 };
 
 const elements = {
@@ -64,6 +69,11 @@ const elements = {
   settingsPanel: document.getElementById("settings-panel"),
   dedupeWithinSessionInput: document.getElementById("dedupe-within-session"),
   dedupeAcrossSessionsInput: document.getElementById("dedupe-across-sessions"),
+  geminiApiKeyInput: document.getElementById("gemini-api-key"),
+  geminiModelInput: document.getElementById("gemini-model"),
+  toggleGeminiApiKeyVisibilityButton: document.getElementById(
+    "toggle-gemini-api-key-visibility"
+  ),
   sessionNameInput: document.getElementById("session-name"),
   filterQueryInput: document.getElementById("filter-query"),
   layoutPanel: document.getElementById("layout-panel"),
@@ -142,6 +152,36 @@ function bindEvents() {
     void updateSettings({
       dedupeAcrossSessions: event.target.checked
     });
+  });
+
+  elements.geminiApiKeyInput.addEventListener("input", (event) => {
+    state.settings = {
+      ...state.settings,
+      geminiApiKey: event.target.value
+    };
+  });
+
+  elements.geminiApiKeyInput.addEventListener("blur", (event) => {
+    void updateSettings({
+      geminiApiKey: event.target.value
+    });
+  });
+
+  elements.geminiModelInput.addEventListener("input", (event) => {
+    state.settings = {
+      ...state.settings,
+      geminiModel: event.target.value
+    };
+  });
+
+  elements.geminiModelInput.addEventListener("blur", (event) => {
+    void updateSettings({
+      geminiModel: event.target.value
+    });
+  });
+
+  elements.toggleGeminiApiKeyVisibilityButton.addEventListener("click", () => {
+    handleToggleGeminiApiKeyVisibility();
   });
 
   elements.layoutResizer.addEventListener("pointerdown", handleResizerPointerDown);
@@ -372,6 +412,20 @@ function render() {
   elements.settingsPanel.hidden = !state.settingsOpen;
   elements.dedupeWithinSessionInput.checked = state.settings.dedupeWithinSession;
   elements.dedupeAcrossSessionsInput.checked = state.settings.dedupeAcrossSessions;
+  elements.geminiApiKeyInput.value = state.settings.geminiApiKey;
+  elements.geminiApiKeyInput.type = state.geminiApiKeyVisible ? "text" : "password";
+  elements.geminiModelInput.value = state.settings.geminiModel;
+  elements.toggleGeminiApiKeyVisibilityButton.textContent = state.geminiApiKeyVisible
+    ? "Hide"
+    : "Show";
+  elements.toggleGeminiApiKeyVisibilityButton.setAttribute(
+    "aria-label",
+    `${state.geminiApiKeyVisible ? "Hide" : "Show"} Gemini API key`
+  );
+  elements.toggleGeminiApiKeyVisibilityButton.setAttribute(
+    "aria-pressed",
+    String(state.geminiApiKeyVisible)
+  );
 
   applyLayoutSizing();
   renderCategories();
@@ -964,6 +1018,14 @@ async function handleBulkFillWithAi() {
     return;
   }
 
+  try {
+    getGeminiConfig();
+  } catch (error) {
+    const message = getErrorMessage(error, "Could not generate draft.");
+    setStatus(message, "error");
+    return;
+  }
+
   state.bulkAiRunning = true;
   render();
 
@@ -971,6 +1033,8 @@ async function handleBulkFillWithAi() {
   let completed = 0;
   let updated = 0;
   let failed = 0;
+  let succeeded = 0;
+  let mergedCategoryCount = 0;
 
   try {
     for (const itemId of itemIds) {
@@ -982,12 +1046,19 @@ async function handleBulkFillWithAi() {
       setStatus(`Using AI on ${completed} of ${itemIds.length} tabs...`);
       const result = await runAiFillForItem(itemId);
       if (result?.ok) {
+        succeeded += 1;
         if (result.changed) {
           updated += 1;
         }
+        mergedCategoryCount += result.mergedCategoryCount || 0;
       } else {
         failed += 1;
       }
+    }
+
+    if (succeeded) {
+      const mergeResult = await finalizeBulkAiCategoryMerge();
+      mergedCategoryCount += mergeResult.mergedCategoryCount;
     }
   } finally {
     state.bulkAiRunning = false;
@@ -995,18 +1066,23 @@ async function handleBulkFillWithAi() {
   }
 
   if (failed) {
-    setStatus(`AI reviewed ${completed} tabs. Updated ${updated}, ${failed} failed.`, "error");
+    setStatus(
+      formatBulkAiStatus(completed, updated, failed, mergedCategoryCount),
+      "error"
+    );
     return;
   }
 
-  setStatus(`AI reviewed ${completed} tabs and updated ${updated}.`, "success");
+  setStatus(formatBulkAiStatus(completed, updated, 0, mergedCategoryCount), "success");
 }
 
 async function runAiFillForItem(itemId) {
   const item = getDraftItem(itemId);
   if (!item) {
-    return { ok: false, changed: false };
+    return { ok: false, changed: false, mergedCategoryCount: 0 };
   }
+
+  const categoryContext = buildCategoryContext();
 
   const requestToken = makeId("ai-fill");
   state.aiRequestTokens = {
@@ -1023,15 +1099,15 @@ async function runAiFillForItem(itemId) {
   render();
 
   try {
-    const payload = await requestAiFillPayload(item);
+    const payload = await requestAiFillPayload(item, categoryContext);
     if (!isCurrentAiRequest(itemId, requestToken)) {
-      return { ok: false, changed: false };
+      return { ok: false, changed: false, mergedCategoryCount: 0 };
     }
 
     const currentItem = getDraftItem(itemId);
     if (!currentItem) {
       clearAiRequest(itemId, requestToken);
-      return { ok: false, changed: false };
+      return { ok: false, changed: false, mergedCategoryCount: 0 };
     }
 
     const nextItem = applyAiPayloadToDraftItem(currentItem, payload);
@@ -1039,7 +1115,7 @@ async function runAiFillForItem(itemId) {
     await persistDraft();
 
     if (!isCurrentAiRequest(itemId, requestToken)) {
-      return { ok: false, changed: false };
+      return { ok: false, changed: false, mergedCategoryCount: 0 };
     }
 
     const changed = didItemChange(currentItem, nextItem);
@@ -1048,19 +1124,25 @@ async function runAiFillForItem(itemId) {
       tone: "success"
     });
     render();
-    return { ok: true, changed };
+    return {
+      ok: true,
+      changed,
+      mergedCategoryCount: payload._categoryResolution?.merged ? 1 : 0
+    };
   } catch (error) {
     console.error("Failed to fill draft with AI", error);
     if (!isCurrentAiRequest(itemId, requestToken)) {
-      return { ok: false, changed: false };
+      return { ok: false, changed: false, mergedCategoryCount: 0 };
     }
 
+    const message = getErrorMessage(error, "Could not generate draft.");
     clearAiRequest(itemId, requestToken, {
-      message: "Could not generate draft.",
+      message,
       tone: "error"
     });
+    setStatus(message, "error");
     render();
-    return { ok: false, changed: false };
+    return { ok: false, changed: false, mergedCategoryCount: 0 };
   }
 }
 
@@ -1152,6 +1234,14 @@ async function handleToggleDraftCollapse() {
 function handleToggleSettings(event) {
   event.stopPropagation();
   state.settingsOpen = !state.settingsOpen;
+  if (!state.settingsOpen) {
+    state.geminiApiKeyVisible = false;
+  }
+  render();
+}
+
+function handleToggleGeminiApiKeyVisibility() {
+  state.geminiApiKeyVisible = !state.geminiApiKeyVisible;
   render();
 }
 
@@ -1169,6 +1259,7 @@ function handleDocumentClick(event) {
   }
 
   state.settingsOpen = false;
+  state.geminiApiKeyVisible = false;
   render();
 }
 
@@ -1178,6 +1269,7 @@ function handleDocumentKeydown(event) {
   }
 
   state.settingsOpen = false;
+  state.geminiApiKeyVisible = false;
   render();
 }
 
@@ -1809,6 +1901,306 @@ function cleanCategory(value) {
   return trimmed || "Unsorted";
 }
 
+function buildCategoryContext() {
+  const registry = buildCategoryRegistry(state.items, state.recentArchives);
+
+  // Only show Gemini categories that are established (library, user-edited, or already
+  // AI-filled by an earlier tab in this session). Pure heuristic draft categories are
+  // excluded so Gemini is free to generate a better category rather than echoing back
+  // the heuristic default.
+  const establishedCategories = registry.entries
+    .filter((entry) => entry.libraryCount > 0 || entry.userCount > 0 || entry.aiCount > 0)
+    .map((entry) => entry.label);
+
+  return {
+    registry,
+    existingCategories: establishedCategories.slice(0, MAX_EXISTING_CATEGORY_CONTEXT)
+  };
+}
+
+function buildCategoryRegistry(draftItems, recentArchives) {
+  const labelStats = new Map();
+
+  for (const item of draftItems || []) {
+    const fieldSources = normalizeDraftFieldSources(item);
+    registerCategoryLabel(
+      labelStats,
+      item.category,
+      "draft",
+      fieldSources.category === FIELD_SOURCES.user,
+      fieldSources.category === FIELD_SOURCES.ai
+    );
+  }
+
+  for (const session of recentArchives || []) {
+    for (const item of session.items || []) {
+      registerCategoryLabel(labelStats, item.category, "library");
+    }
+  }
+
+  const byFingerprintGroups = new Map();
+  for (const stat of labelStats.values()) {
+    if (!byFingerprintGroups.has(stat.fingerprint)) {
+      byFingerprintGroups.set(stat.fingerprint, []);
+    }
+    byFingerprintGroups.get(stat.fingerprint).push(stat);
+  }
+
+  const entries = [...byFingerprintGroups.entries()].map(([fingerprint, candidates]) => {
+    const canonical = candidates.slice().sort(compareCategoryCandidates)[0];
+    const count = candidates.reduce((total, candidate) => total + candidate.count, 0);
+    const draftCount = candidates.reduce((total, candidate) => total + candidate.draftCount, 0);
+    const libraryCount = candidates.reduce((total, candidate) => total + candidate.libraryCount, 0);
+    const userCount = candidates.reduce((total, candidate) => total + candidate.userCount, 0);
+    const aiCount = candidates.reduce((total, candidate) => total + candidate.aiCount, 0);
+
+    return {
+      label: canonical.label,
+      source: draftCount > 0 ? "draft" : "library",
+      count,
+      fingerprint,
+      draftCount,
+      libraryCount,
+      userCount,
+      aiCount,
+      tokens: fingerprint ? fingerprint.split(" ") : [],
+      candidates: candidates
+        .slice()
+        .sort(compareCategoryCandidates)
+        .map((candidate) => candidate.label)
+    };
+  });
+
+  entries.sort(compareCategoryRegistryEntries);
+
+  return {
+    entries,
+    orderedLabels: entries.map((entry) => entry.label),
+    byFingerprint: new Map(entries.map((entry) => [entry.fingerprint, entry]))
+  };
+}
+
+function registerCategoryLabel(labelStats, label, source, isUser = false, isAi = false) {
+  const cleaned = cleanCategory(label);
+  const fingerprint = normalizeCategoryFingerprint(cleaned);
+  const existing = labelStats.get(cleaned) || {
+    label: cleaned,
+    fingerprint,
+    count: 0,
+    draftCount: 0,
+    libraryCount: 0,
+    userCount: 0,
+    aiCount: 0
+  };
+
+  existing.count += 1;
+  if (source === "draft") {
+    existing.draftCount += 1;
+  } else {
+    existing.libraryCount += 1;
+  }
+  if (isUser) {
+    existing.userCount += 1;
+  }
+  if (isAi) {
+    existing.aiCount += 1;
+  }
+
+  labelStats.set(cleaned, existing);
+}
+
+function compareCategoryCandidates(left, right) {
+  if (left.userCount !== right.userCount) {
+    return right.userCount - left.userCount;
+  }
+
+  const leftHasDraft = left.draftCount > 0;
+  const rightHasDraft = right.draftCount > 0;
+  if (leftHasDraft !== rightHasDraft) {
+    return leftHasDraft ? -1 : 1;
+  }
+
+  if (left.count !== right.count) {
+    return right.count - left.count;
+  }
+
+  if (left.label.length !== right.label.length) {
+    return left.label.length - right.label.length;
+  }
+
+  return left.label.localeCompare(right.label);
+}
+
+function compareCategoryRegistryEntries(left, right) {
+  const leftIsDraft = left.source === "draft";
+  const rightIsDraft = right.source === "draft";
+  if (leftIsDraft !== rightIsDraft) {
+    return leftIsDraft ? -1 : 1;
+  }
+
+  if (left.count !== right.count) {
+    return right.count - left.count;
+  }
+
+  return left.label.localeCompare(right.label);
+}
+
+function normalizeCategoryFingerprint(label) {
+  const tokens = cleanCategory(label)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(normalizeCategoryToken);
+
+  return [...new Set(tokens)].sort().join(" ");
+}
+
+function normalizeCategoryToken(token) {
+  if (token.length <= 3) {
+    return token;
+  }
+
+  if (token.endsWith("ies") && token.length > 4) {
+    return `${token.slice(0, -3)}y`;
+  }
+
+  if (
+    token.length > 4 &&
+    token.endsWith("s") &&
+    !token.endsWith("ss") &&
+    !token.endsWith("us") &&
+    !token.endsWith("is") &&
+    !token.endsWith("ics") &&
+    !token.endsWith("news")
+  ) {
+    return token.slice(0, -1);
+  }
+
+  return token;
+}
+
+function buildCategoryCandidateShortlist(proposedCategory, registry) {
+  const proposedFingerprint = normalizeCategoryFingerprint(proposedCategory);
+  const proposedTokens = proposedFingerprint ? proposedFingerprint.split(" ") : [];
+  const proposedTokenSet = new Set(proposedTokens);
+  const compactProposed = proposedFingerprint.replace(/ /g, "");
+  const candidates = [];
+
+  for (const entry of registry.entries) {
+    if (entry.fingerprint === proposedFingerprint) {
+      continue;
+    }
+
+    const sharedTokenCount = entry.tokens.filter((token) => proposedTokenSet.has(token)).length;
+    const unionSize = new Set([...entry.tokens, ...proposedTokens]).size;
+    const compactCandidate = entry.fingerprint.replace(/ /g, "");
+    const substringMatch =
+      compactProposed &&
+      compactCandidate &&
+      (compactProposed.includes(compactCandidate) || compactCandidate.includes(compactProposed));
+
+    if (!sharedTokenCount && !substringMatch) {
+      continue;
+    }
+
+    const overlapScore = unionSize ? sharedTokenCount / unionSize : 0;
+    const score = overlapScore + (substringMatch ? 0.2 : 0);
+    if (score < 0.25) {
+      continue;
+    }
+
+    candidates.push({
+      ...entry,
+      score
+    });
+  }
+
+  return candidates
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return right.score - left.score;
+      }
+
+      const leftIsDraft = left.source === "draft";
+      const rightIsDraft = right.source === "draft";
+      if (leftIsDraft !== rightIsDraft) {
+        return leftIsDraft ? -1 : 1;
+      }
+
+      if (left.count !== right.count) {
+        return right.count - left.count;
+      }
+
+      if (left.label.length !== right.label.length) {
+        return left.label.length - right.label.length;
+      }
+
+      return left.label.localeCompare(right.label);
+    })
+    .slice(0, CATEGORY_MATCH_SHORTLIST_LIMIT);
+}
+
+async function resolveCategoryAgainstRegistry(item, proposedCategory, registry, apiKey, model) {
+  const cleaned = cleanCategory(proposedCategory);
+  if (!registry.entries.length) {
+    return {
+      category: cleaned,
+      merged: false,
+      strategy: "new"
+    };
+  }
+
+  const exactMatch = registry.byFingerprint.get(normalizeCategoryFingerprint(cleaned));
+  if (exactMatch) {
+    return {
+      category: exactMatch.label,
+      merged: exactMatch.label !== cleaned,
+      strategy: "deterministic"
+    };
+  }
+
+  const shortlist = buildCategoryCandidateShortlist(cleaned, registry);
+  if (!shortlist.length) {
+    return {
+      category: cleaned,
+      merged: false,
+      strategy: "new"
+    };
+  }
+
+  try {
+    const matchedCategory = await adjudicateCategoryMatch(
+      item,
+      cleaned,
+      shortlist.map((entry) => entry.label),
+      apiKey,
+      model
+    );
+
+    if (matchedCategory !== "__NEW__") {
+      return {
+        category: matchedCategory,
+        merged: matchedCategory !== cleaned,
+        strategy: "ai"
+      };
+    }
+  } catch (error) {
+    console.warn("Category match adjudication failed", error);
+  }
+
+  return {
+    category: cleaned,
+    merged: false,
+    strategy: "new"
+  };
+}
+
+function remapCollapsedCategories(collapsedCategories, renameMap) {
+  return [...new Set(collapsedCategories.map((name) => renameMap.get(name) || name))];
+}
+
 function isBlankString(value) {
   return String(value || "").trim() === "";
 }
@@ -1883,33 +2275,324 @@ function normalizeAiFillResponse(payload) {
     throw new Error("AI response summary must be a string.");
   }
 
-  return {
+  const normalized = {
     category: cleanCategory(payload.category),
     tags: normalizeAiTags(payload.tags),
     description: payload.description.trim(),
     summary: payload.summary.trim()
   };
+
+  if (payload._categoryResolution && typeof payload._categoryResolution === "object") {
+    normalized._categoryResolution = payload._categoryResolution;
+  }
+
+  return normalized;
 }
 
-async function requestAiFillPayload(item) {
-  const response = await fetch(AI_FILL_ENDPOINT, {
+async function requestAiFillPayload(item, categoryContext = buildCategoryContext()) {
+  const { apiKey, model } = getGeminiConfig();
+  const payload = await callGeminiApi(item, apiKey, model, categoryContext);
+  return normalizeAiFillResponse(payload);
+}
+
+function getGeminiConfig() {
+  const apiKey = String(state.settings.geminiApiKey || "").trim();
+  if (!apiKey) {
+    throw new Error("Add your Gemini API key in Settings (⚙) to use AI fill.");
+  }
+
+  return {
+    apiKey,
+    model: String(state.settings.geminiModel || DEFAULT_GEMINI_MODEL).trim() || DEFAULT_GEMINI_MODEL
+  };
+}
+
+async function callGeminiApi(item, apiKey, model, categoryContext) {
+  const parsed = await callGeminiJsonPrompt(
+    buildGeminiPrompt(item, categoryContext?.existingCategories || []),
+    {
+      type: "OBJECT",
+      required: ["category", "tags", "description", "summary"],
+      properties: {
+        category: {
+          type: "STRING"
+        },
+        tags: {
+          type: "ARRAY",
+          items: {
+            type: "STRING"
+          }
+        },
+        description: {
+          type: "STRING"
+        },
+        summary: {
+          type: "STRING"
+        }
+      }
+    },
+    apiKey,
+    model
+  );
+  const normalized = normalizeGeminiOutput(parsed, item);
+  const categoryResolution = await resolveCategoryAgainstRegistry(
+    item,
+    normalized.category,
+    categoryContext?.registry || buildCategoryRegistry([], []),
+    apiKey,
+    model
+  );
+
+  return {
+    ...normalized,
+    category: categoryResolution.category,
+    _categoryResolution: categoryResolution
+  };
+}
+
+function buildGeminiPrompt(input, existingCategories = []) {
+  const lines = [
+    "You are filling a bookmark draft for a browser tab.",
+    "Return JSON only with exactly these keys:",
+    '- "category": a short category name',
+    '- "tags": an array of 3 to 6 concise lowercase tags',
+    '- "description": one concise sentence explaining why the tab is worth keeping',
+    '- "summary": one short summary sentence, or an empty string if confidence is low',
+    "Base your answer only on the title, URL, and hostname.",
+    "Do not invent details that are not reasonably inferable.",
+    "Reuse an existing category exactly when it is a reasonable fit.",
+    "Only create a new category if none of the existing categories fit well."
+  ];
+
+  if (existingCategories.length) {
+    lines.push("", "Existing categories:");
+    for (const category of existingCategories) {
+      lines.push(`- ${category}`);
+    }
+  }
+
+  lines.push(
+    "",
+    `Title: ${input.title || "(empty)"}`,
+    `URL: ${input.url}`,
+    `Hostname: ${input.hostname}`
+  );
+
+  return lines.join("\n");
+}
+
+async function adjudicateCategoryMatch(item, proposedCategory, candidates, apiKey, model) {
+  const parsed = await callGeminiJsonPrompt(
+    buildCategoryAdjudicationPrompt(item, proposedCategory, candidates),
+    {
+      type: "OBJECT",
+      required: ["match"],
+      properties: {
+        match: {
+          type: "STRING"
+        }
+      }
+    },
+    apiKey,
+    model,
+    0
+  );
+
+  const match = typeof parsed?.match === "string" ? parsed.match.trim() : "";
+  if (match === "__NEW__") {
+    return match;
+  }
+
+  if (candidates.includes(match)) {
+    return match;
+  }
+
+  throw new Error("Gemini returned an invalid category match.");
+}
+
+function buildCategoryAdjudicationPrompt(item, proposedCategory, candidates) {
+  return [
+    "You are deciding whether a proposed bookmark category should reuse an existing category.",
+    'Return JSON only with exactly this key: "match".',
+    'Set "match" to one exact category from the candidate list if it is a reasonable fit.',
+    'Set "match" to "__NEW__" if none of the candidates fit.',
+    "Do not invent any other category label.",
+    "",
+    `Proposed category: ${proposedCategory}`,
+    `Title: ${item.title || "(empty)"}`,
+    `URL: ${item.url}`,
+    `Hostname: ${item.hostname}`,
+    "",
+    "Candidate categories:",
+    ...candidates.map((candidate) => `- ${candidate}`)
+  ].join("\n");
+}
+
+async function callGeminiJsonPrompt(prompt, responseSchema, apiKey, model, temperature = 0.2) {
+  const endpoint =
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Accept: "application/json"
+      "x-goog-api-key": apiKey
     },
     body: JSON.stringify({
-      title: item.title,
-      url: item.url,
-      hostname: item.hostname
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: prompt
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature,
+        responseMimeType: "application/json",
+        responseSchema
+      }
     })
   });
 
   if (!response.ok) {
-    throw new Error(`AI fill failed with status ${response.status}.`);
+    const errorText = await response.text();
+    throw createGeminiRequestError(response.status, errorText);
   }
 
-  return normalizeAiFillResponse(await response.json());
+  const data = await response.json();
+  const text = extractGeminiText(data);
+
+  try {
+    return JSON.parse(text);
+  } catch (_error) {
+    throw new Error("Gemini returned an unexpected response.");
+  }
+}
+
+function extractGeminiText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) {
+    throw new Error("Gemini returned an unexpected response.");
+  }
+
+  const text = parts
+    .map((part) => (typeof part?.text === "string" ? part.text : ""))
+    .join("")
+    .trim();
+
+  if (!text) {
+    throw new Error("Gemini returned an unexpected response.");
+  }
+
+  return text;
+}
+
+function normalizeGeminiOutput(payload, input) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Gemini returned an unexpected response.");
+  }
+
+  const rawCategory = typeof payload.category === "string" ? payload.category.trim() : "";
+  const rawDescription =
+    typeof payload.description === "string" ? payload.description.trim() : "";
+  const rawSummary = typeof payload.summary === "string" ? payload.summary.trim() : "";
+  const rawTags = Array.isArray(payload.tags) ? payload.tags : null;
+
+  if (!rawTags || !rawTags.every((tag) => typeof tag === "string")) {
+    throw new Error("Gemini returned an unexpected response.");
+  }
+
+  const tags = [...new Set(rawTags.map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
+
+  return {
+    category: rawCategory || fallbackCategory(input.hostname),
+    tags,
+    description: rawDescription,
+    summary: rawSummary
+  };
+}
+
+function fallbackCategory(hostname) {
+  const firstPart = String(hostname || "").split(".")[0];
+  if (!firstPart) {
+    return "Unsorted";
+  }
+
+  return firstPart.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function createGeminiRequestError(status, details) {
+  const error = new Error(`Gemini request failed (${status}). Check your API key.`);
+  error.status = status;
+  error.details = details;
+  return error;
+}
+
+function getErrorMessage(error, fallbackMessage) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallbackMessage;
+}
+
+async function finalizeBulkAiCategoryMerge() {
+  const mergeResult = mergeDraftCategoriesAfterAi();
+  if (mergeResult.changed) {
+    await persistDraft();
+  }
+
+  return mergeResult;
+}
+
+function mergeDraftCategoriesAfterAi() {
+  const registry = buildCategoryRegistry(state.items, state.recentArchives);
+  const renameMap = new Map();
+  const beforeCategoryCount = getAllCategoryNames(state.items).length;
+
+  state.items = state.items.map((item) => {
+    const fieldSources = normalizeDraftFieldSources(item);
+    if (fieldSources.category === FIELD_SOURCES.user) {
+      return item;
+    }
+
+    const canonical = registry.byFingerprint.get(normalizeCategoryFingerprint(item.category));
+    if (!canonical || canonical.label === item.category) {
+      return item;
+    }
+
+    renameMap.set(item.category, canonical.label);
+    return {
+      ...item,
+      category: canonical.label
+    };
+  });
+
+  if (renameMap.size) {
+    state.collapsedCategories = remapCollapsedCategories(state.collapsedCategories, renameMap);
+  }
+
+  const afterCategoryCount = getAllCategoryNames(state.items).length;
+
+  return {
+    changed: renameMap.size > 0,
+    mergedCategoryCount: Math.max(0, beforeCategoryCount - afterCategoryCount)
+  };
+}
+
+function formatBulkAiStatus(completed, updated, failed, mergedCategoryCount) {
+  const mergedCopy = mergedCategoryCount
+    ? `, merged ${mergedCategoryCount} categor${mergedCategoryCount === 1 ? "y" : "ies"}`
+    : "";
+
+  if (failed) {
+    return `AI reviewed ${completed} tabs. Updated ${updated}, ${failed} failed${mergedCopy}.`;
+  }
+
+  return `AI reviewed ${completed} tabs and updated ${updated}${mergedCopy}.`;
 }
 
 function applyAiPayloadToDraftItem(item, payload) {
@@ -2084,7 +2767,9 @@ function normalizeSettings(value) {
 
   return {
     dedupeWithinSession: Boolean(value.dedupeWithinSession),
-    dedupeAcrossSessions: Boolean(value.dedupeAcrossSessions)
+    dedupeAcrossSessions: Boolean(value.dedupeAcrossSessions),
+    geminiApiKey: String(value.geminiApiKey || "").trim(),
+    geminiModel: String(value.geminiModel || DEFAULT_GEMINI_MODEL).trim() || DEFAULT_GEMINI_MODEL
   };
 }
 
