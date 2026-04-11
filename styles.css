@@ -671,6 +671,15 @@ button:disabled {
   color: var(--text);
 }
 
+.tab-favicon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
 .tab-meta-actions {
   flex: 0 0 auto;
   justify-content: flex-end;

@@ -467,6 +467,23 @@ function renderTabItem(item) {
   descriptionInput.value = item.description;
   summaryInput.value = item.summary;
 
+  const titleRow = tabNode.querySelector(".tab-title-row");
+  const faviconImg = document.createElement("img");
+  faviconImg.className = "tab-favicon";
+  faviconImg.width = 16;
+  faviconImg.height = 16;
+  faviconImg.alt = "";
+  faviconImg.setAttribute("aria-hidden", "true");
+  if (item.favIconUrl) {
+    faviconImg.src = item.favIconUrl;
+    faviconImg.addEventListener("error", () => {
+      faviconImg.hidden = true;
+    });
+  } else {
+    faviconImg.hidden = true;
+  }
+  titleRow.prepend(faviconImg);
+
   const isInitiallyExpanded = state.expandedTabIds.has(item.id);
   if (!isInitiallyExpanded) {
     tabNode.classList.add("is-collapsed");
@@ -1671,6 +1688,7 @@ function normalizeDraftItem(item) {
     title,
     url: item.url,
     hostname,
+    favIconUrl: typeof item.favIconUrl === "string" ? item.favIconUrl : "",
     category: cleanCategory(item.category),
     description,
     summary,
@@ -1694,6 +1712,7 @@ function buildDraftItem(tab, index) {
     title: tab.title || hostname,
     url: tab.url,
     hostname,
+    favIconUrl: tab.favIconUrl || "",
     category,
     description: "",
     summary: generateSummary(tab.title, tab.url),
