@@ -991,3 +991,64 @@ body.is-resizing-layout * {
     grid-template-columns: 1fr;
   }
 }
+
+/* === Phase strip === */
+.phase-strip {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.phase-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.phase-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: rgba(15, 23, 42, 0.8);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.phase-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.phase-step.is-active .phase-number {
+  border-color: var(--action);
+  background: rgba(99, 102, 241, 0.2);
+  color: #e0e7ff;
+}
+
+.phase-step.is-active .phase-label {
+  color: #e0e7ff;
+}
+
+.phase-step.is-done .phase-number {
+  border-color: var(--success);
+  background: rgba(20, 184, 166, 0.15);
+  color: #99f6e4;
+}
+
+.phase-connector {
+  flex: 1;
+  height: 1.5px;
+  background: var(--border);
+  min-width: 20px;
+  max-width: 48px;
+}

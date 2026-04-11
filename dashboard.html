@@ -62,6 +62,22 @@
       </section>
 
       <section class="panel controls-panel">
+        <div id="phase-strip" class="phase-strip" role="list" aria-label="Workflow progress">
+          <div class="phase-step" data-phase="capture" role="listitem">
+            <span class="phase-number" aria-hidden="true">1</span>
+            <span class="phase-label">Capture</span>
+          </div>
+          <div class="phase-connector" aria-hidden="true"></div>
+          <div class="phase-step" data-phase="review" role="listitem">
+            <span class="phase-number" aria-hidden="true">2</span>
+            <span class="phase-label">Review</span>
+          </div>
+          <div class="phase-connector" aria-hidden="true"></div>
+          <div class="phase-step" data-phase="save" role="listitem">
+            <span class="phase-number" aria-hidden="true">3</span>
+            <span class="phase-label">Save</span>
+          </div>
+        </div>
         <div class="session-row">
           <label class="field">
             <span>Session name</span>

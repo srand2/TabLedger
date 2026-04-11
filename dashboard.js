@@ -55,7 +55,9 @@ const state = {
   aiRequestTokens: {},
   aiStatuses: {},
   expandedTabIds: new Set(),
-  geminiApiKeyVisible: false
+  geminiApiKeyVisible: false,
+  phase: "capture",             // "capture" | "review" | "save"
+  activeView: "draft"           // "draft" | "library"
 };
 
 const elements = {
@@ -91,7 +93,8 @@ const elements = {
   recentArchives: document.getElementById("recent-archives"),
   categoryTemplate: document.getElementById("category-template"),
   tabTemplate: document.getElementById("tab-template"),
-  historyTemplate: document.getElementById("history-template")
+  historyTemplate: document.getElementById("history-template"),
+  phaseStrip: document.getElementById("phase-strip")
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -428,6 +431,7 @@ function render() {
   );
 
   applyLayoutSizing();
+  updatePhaseStrip();
   renderCategories();
   renderArchiveExplorer();
 }
@@ -1243,6 +1247,20 @@ function handleToggleSettings(event) {
 function handleToggleGeminiApiKeyVisibility() {
   state.geminiApiKeyVisible = !state.geminiApiKeyVisible;
   render();
+}
+
+function updatePhaseStrip() {
+  if (!elements.phaseStrip) {
+    return;
+  }
+
+  const PHASE_ORDER = ["capture", "review", "save"];
+  const currentIndex = PHASE_ORDER.indexOf(state.phase);
+
+  elements.phaseStrip.querySelectorAll(".phase-step").forEach((step, index) => {
+    step.classList.toggle("is-active", index === currentIndex);
+    step.classList.toggle("is-done", index < currentIndex);
+  });
 }
 
 function handleDocumentClick(event) {
