@@ -591,6 +591,12 @@ button:disabled {
   background: rgba(31, 41, 55, 0.95);
 }
 
+.category-rename-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .history-session-toggle:hover:not(:disabled) {
   background: rgba(31, 41, 55, 0.95);
 }

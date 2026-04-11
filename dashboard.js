@@ -423,12 +423,26 @@ function renderCategories() {
       render();
     });
 
-    categoryInput.addEventListener("change", async (event) => {
-      const nextCategory = cleanCategory(event.target.value);
+    const renameActions = categoryNode.querySelector(".category-rename-actions");
+    const renameSaveButton = categoryNode.querySelector(".category-rename-save");
+    const renameCancelButton = categoryNode.querySelector(".category-rename-cancel");
+    const originalName = group.name;
+
+    categoryInput.addEventListener("input", () => {
+      renameActions.hidden = categoryInput.value === originalName;
+    });
+
+    renameSaveButton.addEventListener("click", async () => {
+      const nextCategory = cleanCategory(categoryInput.value);
       renameCategory(group.name, nextCategory);
       await persistDraft();
       render();
       setStatus(`Category renamed to "${nextCategory}".`, "success");
+    });
+
+    renameCancelButton.addEventListener("click", () => {
+      categoryInput.value = originalName;
+      renameActions.hidden = true;
     });
 
     for (const item of group.items) {
