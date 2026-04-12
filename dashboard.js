@@ -208,11 +208,13 @@ function bindEvents() {
   elements.viewTabDraftButton.addEventListener("click", () => {
     state.activeView = "draft";
     render();
+    document.querySelector("#draft-pane h2")?.focus();
   });
 
   elements.viewTabLibraryButton.addEventListener("click", () => {
     state.activeView = "library";
     render();
+    document.querySelector("#library-pane h2")?.focus();
   });
 
   window.addEventListener("resize", handleWindowResize);
