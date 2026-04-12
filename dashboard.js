@@ -579,6 +579,12 @@ function renderTabItem(item) {
   descriptionInput.value = item.description;
   summaryInput.value = item.summary;
 
+  const completionDot = tabNode.querySelector(".tab-completion-dot");
+  const completion = getTabCompletion(item);
+  tabNode.dataset.completion = completion;
+  const completionTitles = { pending: "Pending", ai: "AI filled", user: "Reviewed" };
+  completionDot.title = completionTitles[completion];
+
   const titleRow = tabNode.querySelector(".tab-title-row");
   const faviconImg = document.createElement("img");
   faviconImg.className = "tab-favicon";
@@ -2595,6 +2601,18 @@ function getErrorMessage(error, fallbackMessage) {
   }
 
   return fallbackMessage;
+}
+
+function getTabCompletion(item) {
+  const sources = normalizeDraftFieldSources(item);
+  const values = Object.values(sources);
+  if (values.some((s) => s === FIELD_SOURCES.user)) {
+    return "user";
+  }
+  if (values.some((s) => s === FIELD_SOURCES.ai)) {
+    return "ai";
+  }
+  return "pending";
 }
 
 async function finalizeBulkAiCategoryMerge() {

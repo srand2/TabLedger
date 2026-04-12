@@ -1143,6 +1143,28 @@ body.is-resizing-layout * {
   display: none;
 }
 
+/* === Per-tab completion dot === */
+.tab-completion-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+  background: var(--muted);
+  opacity: 0.4;
+  transition: background-color 200ms ease, opacity 200ms ease;
+}
+
+.tab-card[data-completion="ai"] .tab-completion-dot {
+  background: var(--warning);
+  opacity: 1;
+}
+
+.tab-card[data-completion="user"] .tab-completion-dot {
+  background: var(--success);
+  opacity: 1;
+}
+
 /* Save: session name + save actions visible, editing controls hidden */
 .dashboard-shell[data-phase="save"] #scan-all,
 .dashboard-shell[data-phase="save"] #proceed-to-save,
