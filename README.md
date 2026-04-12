@@ -2,8 +2,6 @@
 
 > Capture every open tab, organize them with AI, and save structured sessions to your personal Browsing Library.
 
-![TabLedger popup](media/popup.png)
-
 ---
 
 ## What it does
