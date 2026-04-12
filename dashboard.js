@@ -614,10 +614,14 @@ function renderTabItem(item) {
   summaryInput.value = item.summary;
 
   const completionDot = tabNode.querySelector(".tab-completion-dot");
+  const completionSr = tabNode.querySelector(".tab-completion-sr");
   const completion = getTabCompletion(item);
   tabNode.dataset.completion = completion;
   const completionTitles = { pending: "Pending", ai: "AI filled", user: "Reviewed" };
   completionDot.title = completionTitles[completion];
+  if (completionSr) {
+    completionSr.textContent = completionTitles[completion];
+  }
 
   const titleRow = tabNode.querySelector(".tab-title-row");
   const faviconImg = document.createElement("img");
