@@ -1068,3 +1068,33 @@ body.is-resizing-layout * {
   min-width: 0;
   max-width: 320px;
 }
+
+/* === Phase-aware visibility === */
+
+/* Capture: only Capture All Windows visible in hero-actions */
+.dashboard-shell[data-phase="capture"] #proceed-to-save,
+.dashboard-shell[data-phase="capture"] #save-bookmarks,
+.dashboard-shell[data-phase="capture"] #export-json,
+.dashboard-shell[data-phase="capture"] #back-to-review,
+.dashboard-shell[data-phase="capture"] .session-row,
+.dashboard-shell[data-phase="capture"] .toolbar-row,
+.dashboard-shell[data-phase="capture"] .view-tab-bar {
+  display: none;
+}
+
+/* Review: editing controls + AI fill visible, save actions hidden */
+.dashboard-shell[data-phase="review"] #scan-all,
+.dashboard-shell[data-phase="review"] #save-bookmarks,
+.dashboard-shell[data-phase="review"] #export-json,
+.dashboard-shell[data-phase="review"] #back-to-review,
+.dashboard-shell[data-phase="review"] #session-name-field {
+  display: none;
+}
+
+/* Save: session name + save actions visible, editing controls hidden */
+.dashboard-shell[data-phase="save"] #scan-all,
+.dashboard-shell[data-phase="save"] #proceed-to-save,
+.dashboard-shell[data-phase="save"] #filter-query-field,
+.dashboard-shell[data-phase="save"] .toolbar-row {
+  display: none;
+}
