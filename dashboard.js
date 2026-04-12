@@ -361,6 +361,7 @@ async function handleSaveBookmarks() {
 
     await clearDraftState();
     state.phase = "capture";
+    state.activeView = "library";
     await loadRecentArchives();
     render();
     const skippedSummary = [];

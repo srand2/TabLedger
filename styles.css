@@ -1164,8 +1164,7 @@ body.is-resizing-layout * {
 .dashboard-shell[data-phase="capture"] #export-json,
 .dashboard-shell[data-phase="capture"] #back-to-review,
 .dashboard-shell[data-phase="capture"] .session-row,
-.dashboard-shell[data-phase="capture"] .toolbar-row,
-.dashboard-shell[data-phase="capture"] .view-tab-bar {
+.dashboard-shell[data-phase="capture"] .toolbar-row {
   display: none;
 }
 
