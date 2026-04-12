@@ -137,11 +137,13 @@ function bindEvents() {
 
   elements.proceedToSaveButton.addEventListener("click", () => {
     state.phase = "save";
+    state.activeView = "draft";
     render();
   });
 
   elements.backToReviewButton.addEventListener("click", () => {
     state.phase = "review";
+    state.activeView = "draft";
     render();
   });
 
@@ -557,13 +559,12 @@ function renderCategories() {
       render();
     });
 
-    const renameActions = categoryNode.querySelector(".category-rename-actions");
     const renameSaveButton = categoryNode.querySelector(".category-rename-save");
     const renameCancelButton = categoryNode.querySelector(".category-rename-cancel");
     const originalName = group.name;
 
     categoryInput.addEventListener("input", () => {
-      renameActions.hidden = categoryInput.value === originalName;
+      renameSaveButton.disabled = categoryInput.value === originalName;
     });
 
     renameSaveButton.addEventListener("click", async () => {
@@ -574,9 +575,10 @@ function renderCategories() {
       setStatus(`Category renamed to "${nextCategory}".`, "success");
     });
 
-    renameCancelButton.addEventListener("click", () => {
-      categoryInput.value = originalName;
-      renameActions.hidden = true;
+    renameCancelButton.addEventListener("click", async () => {
+      state.items = state.items.filter((item) => item.category !== group.name);
+      await persistDraft();
+      render();
     });
 
     for (const item of group.items) {
@@ -599,8 +601,8 @@ function renderTabItem(item) {
   const tagsInput = tabNode.querySelector(".item-tags-input");
   const descriptionInput = tabNode.querySelector(".item-description-input");
   const summaryInput = tabNode.querySelector(".item-summary-input");
-  const expandToggle = tabNode.querySelector(".tab-expand-toggle");
-  const expandGlyph = expandToggle.querySelector(".toggle-glyph");
+  const expandToggle = tabNode.querySelector(".tab-title-row");
+  const expandGlyph = tabNode.querySelector(".tab-expand-glyph");
   const currentAiStatus = state.aiStatuses[item.id];
   const isAiLoading = Boolean(state.aiRequestTokens[item.id]);
 
@@ -651,7 +653,7 @@ function renderTabItem(item) {
     expandGlyph.textContent = "▾";
   }
 
-  expandToggle.addEventListener("click", () => {
+  function toggleExpand() {
     const isNowCollapsed = tabNode.classList.toggle("is-collapsed");
     const expanded = !isNowCollapsed;
     if (expanded) {
@@ -662,6 +664,18 @@ function renderTabItem(item) {
     expandToggle.setAttribute("aria-expanded", String(expanded));
     expandToggle.setAttribute("aria-label", expanded ? "Collapse tab fields" : "Expand tab fields");
     expandGlyph.textContent = expanded ? "▾" : "▸";
+  }
+
+  expandToggle.addEventListener("click", (e) => {
+    if (e.target.closest("a, button")) return;
+    toggleExpand();
+  });
+
+  expandToggle.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleExpand();
+    }
   });
 
   tabNode.querySelector(".field-grid").addEventListener("focusin", () => {

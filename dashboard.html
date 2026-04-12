@@ -101,14 +101,14 @@
           <button id="proceed-to-save" class="primary-button" type="button">
             Name &amp; Save →
           </button>
-          <button id="save-bookmarks" class="ghost-button" disabled>
-            Save to Library
-          </button>
-          <button id="export-json" class="ghost-button" disabled>
-            Export JSON
+          <button id="save-bookmarks" class="primary-button" disabled>
+            Save to Library →
           </button>
           <button id="back-to-review" class="ghost-button" type="button">
             ← Back to Review
+          </button>
+          <button id="export-json" class="ghost-button" disabled>
+            Export JSON
           </button>
         </div>
       </section>
@@ -280,9 +280,9 @@
             <input class="category-name-input" type="text" />
           </label>
           <span class="category-edit-hint" aria-hidden="true" title="Click name to rename">✎</span>
-          <div class="category-rename-actions" hidden>
-            <button class="secondary-button small-button category-rename-save" type="button">Save</button>
-            <button class="ghost-button small-button category-rename-cancel" type="button">Cancel</button>
+          <div class="category-rename-actions">
+            <button class="secondary-button small-button category-rename-save" type="button" disabled>Save</button>
+            <button class="danger-button small-button category-rename-cancel" type="button">Remove</button>
           </div>
           <span class="category-pill item-count-pill"></span>
         </div>
@@ -292,7 +292,7 @@
 
     <template id="tab-template">
       <article class="tab-card">
-        <div class="tab-title-row">
+        <div class="tab-title-row" role="button" tabindex="0" aria-expanded="false" aria-label="Expand tab fields">
           <div class="tab-heading-copy">
             <h3 class="tab-title"></h3>
             <a class="tab-link" target="_blank" rel="noreferrer"></a>
@@ -300,14 +300,7 @@
           <span class="tab-completion-dot" aria-hidden="true" title="Pending"></span>
           <span class="sr-only tab-completion-sr">Pending</span>
           <div class="tab-meta-actions">
-            <button
-              class="ghost-button small-button tab-expand-toggle"
-              type="button"
-              aria-expanded="false"
-              aria-label="Expand tab fields"
-            >
-              <span class="toggle-glyph" aria-hidden="true">▸</span>
-            </button>
+            <span class="toggle-glyph tab-expand-glyph" aria-hidden="true">▸</span>
             <span class="hostname-pill"></span>
             <button class="ghost-button small-button tab-ai-button" type="button">
               <span class="tab-ai-icon" aria-hidden="true">✦</span>

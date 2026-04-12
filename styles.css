@@ -93,6 +93,19 @@ body {
 
 .tab-title-row {
   align-items: flex-start;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tab-expand-glyph {
+  font-size: 11px;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform 120ms ease;
+}
+
+.tab-card:not(.is-collapsed) .tab-expand-glyph {
+  transform: rotate(90deg);
 }
 
 .hero-top-row {
@@ -646,8 +659,8 @@ button:disabled {
   opacity: 1;
 }
 
-/* Hide hint while rename actions are visible */
-.category-header:has(.category-rename-actions:not([hidden])) .category-edit-hint {
+/* Hide hint since rename actions are always visible */
+.category-edit-hint {
   display: none;
 }
 
