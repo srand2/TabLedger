@@ -61,6 +61,7 @@ const state = {
 };
 
 const elements = {
+  dashboardShell: document.querySelector(".dashboard-shell"),
   scanAllButton: document.getElementById("scan-all"),
   saveBookmarksButton: document.getElementById("save-bookmarks"),
   exportJsonButton: document.getElementById("export-json"),
@@ -406,7 +407,7 @@ async function handleResetDraft() {
 }
 
 function render() {
-  document.querySelector(".dashboard-shell").dataset.phase = state.phase;
+  elements.dashboardShell.dataset.phase = state.phase;
   elements.sessionNameInput.value = state.sessionName;
   elements.filterQueryInput.value = state.filterQuery;
   elements.archiveFilterInput.value = state.archiveFilterQuery;
