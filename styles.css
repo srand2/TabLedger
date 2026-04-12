@@ -1206,3 +1206,10 @@ body.is-resizing-layout * {
 .dashboard-shell[data-phase="save"] .toolbar-row {
   display: none;
 }
+
+/* === Active-view visibility === */
+
+/* Library view: hide the entire workflow controls panel */
+.dashboard-shell[data-active-view="library"] .controls-panel {
+  display: none;
+}

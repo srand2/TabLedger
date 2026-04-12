@@ -439,6 +439,7 @@ async function handleResetDraft() {
 
 function render() {
   elements.dashboardShell.dataset.phase = state.phase;
+  elements.dashboardShell.dataset.activeView = state.activeView;
   elements.sessionNameInput.value = state.sessionName;
   elements.filterQueryInput.value = state.filterQuery;
   elements.archiveFilterInput.value = state.archiveFilterQuery;
