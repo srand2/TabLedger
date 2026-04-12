@@ -76,6 +76,8 @@ const elements = {
   toggleGeminiApiKeyVisibilityButton: document.getElementById(
     "toggle-gemini-api-key-visibility"
   ),
+  proceedToSaveButton: document.getElementById("proceed-to-save"),
+  backToReviewButton: document.getElementById("back-to-review"),
   sessionNameInput: document.getElementById("session-name"),
   filterQueryInput: document.getElementById("filter-query"),
   layoutPanel: document.getElementById("layout-panel"),
@@ -129,6 +131,16 @@ function bindEvents() {
   elements.toggleDraftCollapseButton.addEventListener("click", handleToggleDraftCollapse);
   elements.bulkFillAiButton.addEventListener("click", handleBulkFillWithAi);
   elements.settingsToggleButton.addEventListener("click", handleToggleSettings);
+
+  elements.proceedToSaveButton.addEventListener("click", () => {
+    state.phase = "save";
+    render();
+  });
+
+  elements.backToReviewButton.addEventListener("click", () => {
+    state.phase = "review";
+    render();
+  });
 
   elements.sessionNameInput.addEventListener("input", async (event) => {
     state.sessionName = event.target.value;
@@ -394,6 +406,7 @@ async function handleResetDraft() {
 }
 
 function render() {
+  document.querySelector(".dashboard-shell").dataset.phase = state.phase;
   elements.sessionNameInput.value = state.sessionName;
   elements.filterQueryInput.value = state.filterQuery;
   elements.archiveFilterInput.value = state.archiveFilterQuery;
