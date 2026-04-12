@@ -296,10 +296,23 @@ async function scanTabs() {
     state.phase = "review";
     render();
 
-    setStatus(
-      `${state.items.length} tabs grouped into ${getAllGroups().length} categories.${state.skippedCount ? ` ${state.skippedCount} unsupported tab${state.skippedCount === 1 ? " was" : "s were"} skipped.` : ""}`,
-      "success"
-    );
+    const captureCount = state.items.length;
+    const groupCount = getAllGroups().length;
+    const skippedSuffix = state.skippedCount
+      ? ` ${state.skippedCount} unsupported tab${state.skippedCount === 1 ? " was" : "s were"} skipped.`
+      : "";
+    const hasApiKey = String(state.settings.geminiApiKey || "").trim().length > 0;
+
+    if (hasApiKey) {
+      setStatus(`${captureCount} tabs captured. Starting AI fill...`);
+      // Schedule after the scan's finally block runs setBusy(false)
+      setTimeout(() => { void handleBulkFillWithAi(); }, 0);
+    } else {
+      setStatus(
+        `${captureCount} tabs grouped into ${groupCount} categories.${skippedSuffix}`,
+        "success"
+      );
+    }
   } catch (error) {
     console.error("Failed to scan tabs", error);
     setStatus("Could not scan open tabs. Please try again.", "error");
