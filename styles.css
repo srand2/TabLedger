@@ -1057,3 +1057,13 @@ body.is-resizing-layout * {
   min-width: 20px;
   max-width: 48px;
 }
+
+/* Wrapper divs for phase-conditional session-row fields */
+#session-name-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#filter-query-field {
+  min-width: 0;
+}
