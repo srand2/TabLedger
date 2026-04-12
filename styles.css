@@ -398,6 +398,11 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.category-action-btn:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
 .primary-button {
   background: var(--action);
   color: var(--text);
@@ -641,8 +646,53 @@ button:disabled {
 
 .category-rename-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
+  align-items: center;
+}
+
+.category-action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+/* Save — invisible when disabled, teal when name has changed */
+.category-rename-save {
+  color: transparent;
+  cursor: default;
+}
+
+.category-rename-save:not(:disabled) {
+  color: var(--success);
+  cursor: pointer;
+}
+
+.category-rename-save:not(:disabled):hover {
+  background: rgba(20, 184, 166, 0.12);
+  border-color: rgba(20, 184, 166, 0.3);
+}
+
+/* Remove — muted by default, red on hover */
+.category-rename-cancel {
+  color: var(--muted);
+}
+
+.category-rename-cancel:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
 }
 
 .category-edit-hint {
