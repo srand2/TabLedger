@@ -208,11 +208,13 @@ function bindEvents() {
   elements.viewTabDraftButton.addEventListener("click", () => {
     state.activeView = "draft";
     render();
+    elements.draftPane.querySelector("h2").focus();
   });
 
   elements.viewTabLibraryButton.addEventListener("click", () => {
     state.activeView = "library";
     render();
+    elements.libraryPane.querySelector("h2").focus();
   });
 
   window.addEventListener("resize", handleWindowResize);
@@ -364,6 +366,25 @@ async function handleSaveBookmarks() {
     state.activeView = "library";
     await loadRecentArchives();
     render();
+
+    // Highlight newly saved session card
+    const savedTitle = response.result.sessionTitle;
+    if (savedTitle) {
+      const cards = document.querySelectorAll(".history-card");
+      const match = [...cards].find(
+        (c) => c.querySelector(".history-title-button")?.textContent === savedTitle
+      );
+      if (match) {
+        match.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        match.classList.add("just-saved");
+        match.addEventListener(
+          "animationend",
+          () => match.classList.remove("just-saved"),
+          { once: true }
+        );
+      }
+    }
+
     const skippedSummary = [];
     if (response.result.duplicateCounts?.withinSession) {
       skippedSummary.push(`${response.result.duplicateCounts.withinSession} duplicate${response.result.duplicateCounts.withinSession === 1 ? "" : "s"} in this session`);
@@ -439,6 +460,7 @@ async function handleResetDraft() {
 
 function render() {
   elements.dashboardShell.dataset.phase = state.phase;
+  elements.dashboardShell.dataset.activeView = state.activeView;
   elements.sessionNameInput.value = state.sessionName;
   elements.filterQueryInput.value = state.filterQuery;
   elements.archiveFilterInput.value = state.archiveFilterQuery;
@@ -594,10 +616,14 @@ function renderTabItem(item) {
   summaryInput.value = item.summary;
 
   const completionDot = tabNode.querySelector(".tab-completion-dot");
+  const completionSr = tabNode.querySelector(".tab-completion-sr");
   const completion = getTabCompletion(item);
   tabNode.dataset.completion = completion;
   const completionTitles = { pending: "Pending", ai: "AI filled", user: "Reviewed" };
   completionDot.title = completionTitles[completion];
+  if (completionSr) {
+    completionSr.textContent = completionTitles[completion];
+  }
 
   const titleRow = tabNode.querySelector(".tab-title-row");
   const faviconImg = document.createElement("img");

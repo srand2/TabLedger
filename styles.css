@@ -632,6 +632,25 @@ button:disabled {
   flex-shrink: 0;
 }
 
+.category-edit-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  flex-shrink: 0;
+  cursor: text;
+  user-select: none;
+}
+
+.category-card:hover .category-edit-hint {
+  opacity: 1;
+}
+
+/* Hide hint while rename actions are visible */
+.category-header:has(.category-rename-actions:not([hidden])) .category-edit-hint {
+  display: none;
+}
+
 .history-session-toggle:hover:not(:disabled) {
   background: rgba(31, 41, 55, 0.95);
 }
@@ -1135,9 +1154,10 @@ body.is-resizing-layout * {
 }
 
 .view-tab.is-active {
-  background: rgba(31, 41, 55, 0.9);
+  background: rgba(99, 102, 241, 0.15);
   color: var(--text);
-  border-color: var(--border);
+  border-color: rgba(99, 102, 241, 0.45);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.08);
 }
 
 /* Layout panel: show only the active view pane, full width */
@@ -1205,4 +1225,68 @@ body.is-resizing-layout * {
 .dashboard-shell[data-phase="save"] #filter-query-field,
 .dashboard-shell[data-phase="save"] .toolbar-row {
   display: none;
+}
+
+/* === Active-view visibility === */
+
+/* Library view: hide the entire workflow controls panel */
+.dashboard-shell[data-active-view="library"] .controls-panel {
+  display: none;
+}
+
+/* === Post-save highlight === */
+@keyframes savedFlash {
+  0%   { box-shadow: 0 0 0 2px var(--success), 0 0 20px rgba(20, 184, 166, 0.25); }
+  60%  { box-shadow: 0 0 0 2px var(--success), 0 0 20px rgba(20, 184, 166, 0.25); }
+  100% { box-shadow: none; }
+}
+
+.history-card.just-saved {
+  animation: savedFlash 2s ease-out forwards;
+}
+
+/* === Focus ring suppression for programmatically-focused headings === */
+#draft-pane h2[tabindex="-1"]:focus,
+#library-pane h2[tabindex="-1"]:focus {
+  outline: none;
+}
+
+/* === Screen reader only utility === */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* === Empty state decorative glyph === */
+#categories > .empty-state::before {
+  content: "";
+  display: block;
+  width: 38px;
+  height: 38px;
+  margin: 0 auto 14px;
+  border: 1.5px solid var(--border);
+  border-left: 3px solid var(--category);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.06);
+  opacity: 0.7;
+}
+
+#recent-archives > .empty-state::before {
+  content: "";
+  display: block;
+  width: 38px;
+  height: 38px;
+  margin: 0 auto 14px;
+  border: 1.5px solid var(--border);
+  border-left: 3px solid var(--tags);
+  border-radius: 8px;
+  background: rgba(20, 184, 166, 0.06);
+  opacity: 0.7;
 }
