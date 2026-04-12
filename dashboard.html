@@ -47,10 +47,56 @@
                   <small>Skip URLs that already exist in saved Browsing Library sessions.</small>
                 </span>
               </label>
+              <div class="settings-section">
+                <h3>AI</h3>
+                <div class="settings-api-block">
+                  <label class="field">
+                    <span>API Key</span>
+                    <div class="settings-input-row">
+                      <input
+                        id="gemini-api-key"
+                        type="password"
+                        placeholder="AIza..."
+                        autocomplete="off"
+                        spellcheck="false"
+                      />
+                      <button
+                        id="toggle-gemini-api-key-visibility"
+                        class="ghost-button small-button"
+                        type="button"
+                        aria-pressed="false"
+                        aria-label="Show Gemini API key"
+                      >
+                        Show
+                      </button>
+                    </div>
+                    <small>
+                      Get yours at
+                      <a
+                        href="https://aistudio.google.com/app/apikey"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        aistudio.google.com
+                      </a>
+                    </small>
+                  </label>
+                  <label class="field">
+                    <span>Model</span>
+                    <input
+                      id="gemini-model"
+                      type="text"
+                      placeholder="gemini-2.5-flash"
+                      spellcheck="false"
+                    />
+                    <small>Optional. Default: gemini-2.5-flash</small>
+                  </label>
+                </div>
+              </div>
             </section>
           </div>
         </div>
-<div class="hero-actions">
+        <div class="hero-actions">
           <button id="scan-all" class="primary-button">Capture All Windows</button>
           <button id="save-bookmarks" class="ghost-button" disabled>
             Save to Library

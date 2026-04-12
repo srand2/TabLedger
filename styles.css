@@ -255,6 +255,12 @@ body {
   border-top: 1px solid rgba(45, 55, 72, 0.75);
 }
 
+.settings-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(45, 55, 72, 0.75);
+}
+
 .settings-option input[type="checkbox"] {
   width: 16px;
   height: 16px;
@@ -276,6 +282,35 @@ body {
   color: var(--muted);
   font-size: 0.77rem;
   line-height: 1.45;
+}
+
+.settings-api-block {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-input-row input {
+  min-width: 0;
+}
+
+.settings-panel .field small {
+  color: var(--muted);
+  font-size: 0.77rem;
+  line-height: 1.45;
+}
+
+.settings-panel .field small a {
+  color: #bfdbfe;
+}
+
+.settings-panel .field small a:hover {
+  color: #dbeafe;
 }
 
 .field {
