@@ -1045,6 +1045,11 @@ body.is-resizing-layout * {
   color: #99f6e4;
 }
 
+.phase-step.is-done .phase-label {
+  color: #99f6e4;
+  opacity: 0.65;
+}
+
 .phase-connector {
   flex: 1;
   height: 1.5px;
