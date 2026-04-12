@@ -1026,3 +1026,184 @@ body.is-resizing-layout * {
     grid-template-columns: 1fr;
   }
 }
+
+/* === Phase strip === */
+.phase-strip {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.phase-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.phase-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: rgba(15, 23, 42, 0.8);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.phase-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.phase-step.is-active .phase-number {
+  border-color: var(--action);
+  background: rgba(99, 102, 241, 0.2);
+  color: #e0e7ff;
+}
+
+.phase-step.is-active .phase-label {
+  color: #e0e7ff;
+}
+
+.phase-step.is-done .phase-number {
+  border-color: var(--success);
+  background: rgba(20, 184, 166, 0.15);
+  color: #99f6e4;
+}
+
+.phase-step.is-done .phase-label {
+  color: #99f6e4;
+  opacity: 0.65;
+}
+
+.phase-connector {
+  flex: 1;
+  height: 1.5px;
+  background: var(--border);
+  min-width: 20px;
+  max-width: 48px;
+}
+
+/* Wrapper divs for phase-conditional session-row fields */
+#session-name-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#filter-query-field {
+  min-width: 0;
+  max-width: 320px;
+}
+
+/* === View tab bar === */
+.view-tab-bar {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(11, 18, 32, 0.7);
+  align-self: flex-start;
+  width: fit-content;
+}
+
+.view-tab {
+  min-height: 28px;
+  padding: 4px 16px;
+  border-radius: 9px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.view-tab:hover:not(.is-active) {
+  background: rgba(31, 41, 55, 0.6);
+  color: var(--text);
+}
+
+.view-tab.is-active {
+  background: rgba(31, 41, 55, 0.9);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+/* Layout panel: show only the active view pane, full width */
+.layout-panel.view-draft,
+.layout-panel.view-library {
+  grid-template-columns: 1fr;
+}
+
+.layout-panel.view-draft .history-column,
+.layout-panel.view-draft .layout-resizer {
+  display: none;
+}
+
+.layout-panel.view-library .draft-column,
+.layout-panel.view-library .layout-resizer {
+  display: none;
+}
+
+/* === Phase-aware visibility === */
+
+/* Capture: only Capture All Windows visible in hero-actions */
+.dashboard-shell[data-phase="capture"] #proceed-to-save,
+.dashboard-shell[data-phase="capture"] #save-bookmarks,
+.dashboard-shell[data-phase="capture"] #export-json,
+.dashboard-shell[data-phase="capture"] #back-to-review,
+.dashboard-shell[data-phase="capture"] .session-row,
+.dashboard-shell[data-phase="capture"] .toolbar-row,
+.dashboard-shell[data-phase="capture"] .view-tab-bar {
+  display: none;
+}
+
+/* Review: editing controls + AI fill visible, save actions hidden */
+.dashboard-shell[data-phase="review"] #scan-all,
+.dashboard-shell[data-phase="review"] #save-bookmarks,
+.dashboard-shell[data-phase="review"] #export-json,
+.dashboard-shell[data-phase="review"] #back-to-review,
+.dashboard-shell[data-phase="review"] #session-name-field {
+  display: none;
+}
+
+/* === Per-tab completion dot === */
+.tab-completion-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+  background: var(--muted);
+  opacity: 0.4;
+  transition: background-color 200ms ease, opacity 200ms ease;
+}
+
+.tab-card[data-completion="ai"] .tab-completion-dot {
+  background: var(--warning);
+  opacity: 1;
+}
+
+.tab-card[data-completion="user"] .tab-completion-dot {
+  background: var(--success);
+  opacity: 1;
+}
+
+/* Save: session name + save actions visible, editing controls hidden */
+.dashboard-shell[data-phase="save"] #scan-all,
+.dashboard-shell[data-phase="save"] #proceed-to-save,
+.dashboard-shell[data-phase="save"] #filter-query-field,
+.dashboard-shell[data-phase="save"] .toolbar-row {
+  display: none;
+}

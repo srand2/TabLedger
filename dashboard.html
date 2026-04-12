@@ -98,33 +98,59 @@
         </div>
         <div class="hero-actions">
           <button id="scan-all" class="primary-button">Capture All Windows</button>
+          <button id="proceed-to-save" class="primary-button" type="button">
+            Proceed to Save →
+          </button>
           <button id="save-bookmarks" class="ghost-button" disabled>
             Save to Library
           </button>
           <button id="export-json" class="ghost-button" disabled>
             Export JSON
           </button>
+          <button id="back-to-review" class="ghost-button" type="button">
+            ← Back to Review
+          </button>
         </div>
       </section>
 
       <section class="panel controls-panel">
+        <div id="phase-strip" class="phase-strip" role="list" aria-label="Workflow progress">
+          <div class="phase-step" data-phase="capture" role="listitem">
+            <span class="phase-number" aria-hidden="true">1</span>
+            <span class="phase-label">Capture</span>
+          </div>
+          <div class="phase-connector" aria-hidden="true"></div>
+          <div class="phase-step" data-phase="review" role="listitem">
+            <span class="phase-number" aria-hidden="true">2</span>
+            <span class="phase-label">Review</span>
+          </div>
+          <div class="phase-connector" aria-hidden="true"></div>
+          <div class="phase-step" data-phase="save" role="listitem">
+            <span class="phase-number" aria-hidden="true">3</span>
+            <span class="phase-label">Save</span>
+          </div>
+        </div>
         <div class="session-row">
-          <label class="field">
-            <span>Session name</span>
-            <input
-              id="session-name"
-              type="text"
-              placeholder="Incident review, research batch, sprint planning..."
-            />
-          </label>
-          <label class="field compact-search">
-            <span>Filter</span>
-            <input
-              id="filter-query"
-              type="text"
-              placeholder="Search by title, URL, tag, or summary"
-            />
-          </label>
+          <div id="session-name-field">
+            <label class="field">
+              <span>Session name</span>
+              <input
+                id="session-name"
+                type="text"
+                placeholder="Incident review, research batch, sprint planning..."
+              />
+            </label>
+          </div>
+          <div id="filter-query-field">
+            <label class="field compact-search">
+              <span>Filter</span>
+              <input
+                id="filter-query"
+                type="text"
+                placeholder="Search by title, URL, tag, or summary"
+              />
+            </label>
+          </div>
           <div class="summary-strip">
             <div>
               <strong id="tab-count">0</strong>
@@ -148,6 +174,29 @@
         </div>
         <p id="status-message" class="status-message" aria-live="polite"></p>
       </section>
+
+      <div class="view-tab-bar" role="tablist" aria-label="View selector">
+        <button
+          id="view-tab-draft"
+          class="view-tab"
+          role="tab"
+          aria-selected="true"
+          aria-controls="draft-pane"
+          type="button"
+        >
+          Draft
+        </button>
+        <button
+          id="view-tab-library"
+          class="view-tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="library-pane"
+          type="button"
+        >
+          Library
+        </button>
+      </div>
 
       <section id="layout-panel" class="panel layout-panel">
         <div id="draft-pane" class="draft-column">
@@ -245,6 +294,11 @@
             <h3 class="tab-title"></h3>
             <a class="tab-link" target="_blank" rel="noreferrer"></a>
           </div>
+          <span
+            class="tab-completion-dot"
+            aria-hidden="true"
+            title="Pending"
+          ></span>
           <div class="tab-meta-actions">
             <button
               class="ghost-button small-button tab-expand-toggle"

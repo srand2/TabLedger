@@ -55,10 +55,13 @@ const state = {
   aiRequestTokens: {},
   aiStatuses: {},
   expandedTabIds: new Set(),
-  geminiApiKeyVisible: false
+  geminiApiKeyVisible: false,
+  phase: "capture",             // "capture" | "review" | "save"
+  activeView: "draft"           // "draft" | "library"
 };
 
 const elements = {
+  dashboardShell: document.querySelector(".dashboard-shell"),
   scanAllButton: document.getElementById("scan-all"),
   saveBookmarksButton: document.getElementById("save-bookmarks"),
   exportJsonButton: document.getElementById("export-json"),
@@ -74,12 +77,16 @@ const elements = {
   toggleGeminiApiKeyVisibilityButton: document.getElementById(
     "toggle-gemini-api-key-visibility"
   ),
+  proceedToSaveButton: document.getElementById("proceed-to-save"),
+  backToReviewButton: document.getElementById("back-to-review"),
   sessionNameInput: document.getElementById("session-name"),
   filterQueryInput: document.getElementById("filter-query"),
   layoutPanel: document.getElementById("layout-panel"),
   draftPane: document.getElementById("draft-pane"),
   libraryPane: document.getElementById("library-pane"),
   layoutResizer: document.getElementById("layout-resizer"),
+  viewTabDraftButton: document.getElementById("view-tab-draft"),
+  viewTabLibraryButton: document.getElementById("view-tab-library"),
   archiveFilterInput: document.getElementById("archive-filter"),
   archiveActiveFilters: document.getElementById("archive-active-filters"),
   archiveSummary: document.getElementById("archive-summary"),
@@ -91,7 +98,8 @@ const elements = {
   recentArchives: document.getElementById("recent-archives"),
   categoryTemplate: document.getElementById("category-template"),
   tabTemplate: document.getElementById("tab-template"),
-  historyTemplate: document.getElementById("history-template")
+  historyTemplate: document.getElementById("history-template"),
+  phaseStrip: document.getElementById("phase-strip")
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -126,6 +134,16 @@ function bindEvents() {
   elements.toggleDraftCollapseButton.addEventListener("click", handleToggleDraftCollapse);
   elements.bulkFillAiButton.addEventListener("click", handleBulkFillWithAi);
   elements.settingsToggleButton.addEventListener("click", handleToggleSettings);
+
+  elements.proceedToSaveButton.addEventListener("click", () => {
+    state.phase = "save";
+    render();
+  });
+
+  elements.backToReviewButton.addEventListener("click", () => {
+    state.phase = "review";
+    render();
+  });
 
   elements.sessionNameInput.addEventListener("input", async (event) => {
     state.sessionName = event.target.value;
@@ -186,6 +204,17 @@ function bindEvents() {
 
   elements.layoutResizer.addEventListener("pointerdown", handleResizerPointerDown);
   elements.layoutResizer.addEventListener("keydown", handleResizerKeyDown);
+
+  elements.viewTabDraftButton.addEventListener("click", () => {
+    state.activeView = "draft";
+    render();
+  });
+
+  elements.viewTabLibraryButton.addEventListener("click", () => {
+    state.activeView = "library";
+    render();
+  });
+
   window.addEventListener("resize", handleWindowResize);
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("keydown", handleDocumentKeydown);
@@ -208,6 +237,7 @@ async function restoreDraft() {
     : getAllCategoryNames(state.items);
 
   if (state.items.length) {
+    state.phase = "review";
     setStatus(`Restored ${state.items.length} tabs from the last draft.`, "success");
   }
 }
@@ -263,12 +293,26 @@ async function scanTabs() {
     }
 
     await persistDraft();
+    state.phase = "review";
     render();
 
-    setStatus(
-      `${state.items.length} tabs grouped into ${getAllGroups().length} categories.${state.skippedCount ? ` ${state.skippedCount} unsupported tab${state.skippedCount === 1 ? " was" : "s were"} skipped.` : ""}`,
-      "success"
-    );
+    const captureCount = state.items.length;
+    const groupCount = getAllGroups().length;
+    const skippedSuffix = state.skippedCount
+      ? ` ${state.skippedCount} unsupported tab${state.skippedCount === 1 ? " was" : "s were"} skipped.`
+      : "";
+    const hasApiKey = String(state.settings.geminiApiKey || "").trim().length > 0;
+
+    if (hasApiKey) {
+      setStatus(`${captureCount} tabs captured. Starting AI fill...`);
+      // Schedule after the scan's finally block runs setBusy(false)
+      setTimeout(() => { void handleBulkFillWithAi(); }, 0);
+    } else {
+      setStatus(
+        `${captureCount} tabs grouped into ${groupCount} categories.${skippedSuffix}`,
+        "success"
+      );
+    }
   } catch (error) {
     console.error("Failed to scan tabs", error);
     setStatus("Could not scan open tabs. Please try again.", "error");
@@ -316,6 +360,7 @@ async function handleSaveBookmarks() {
     }
 
     await clearDraftState();
+    state.phase = "capture";
     await loadRecentArchives();
     render();
     const skippedSummary = [];
@@ -386,11 +431,13 @@ async function handleExportJson() {
 
 async function handleResetDraft() {
   await clearDraftState();
+  state.phase = "capture";
   render();
   setStatus("Cleared the current draft.", "success");
 }
 
 function render() {
+  elements.dashboardShell.dataset.phase = state.phase;
   elements.sessionNameInput.value = state.sessionName;
   elements.filterQueryInput.value = state.filterQuery;
   elements.archiveFilterInput.value = state.archiveFilterQuery;
@@ -427,7 +474,17 @@ function render() {
     String(state.geminiApiKeyVisible)
   );
 
+  // View tab state
+  const isDraftView = state.activeView === "draft";
+  elements.viewTabDraftButton.classList.toggle("is-active", isDraftView);
+  elements.viewTabDraftButton.setAttribute("aria-selected", String(isDraftView));
+  elements.viewTabLibraryButton.classList.toggle("is-active", !isDraftView);
+  elements.viewTabLibraryButton.setAttribute("aria-selected", String(!isDraftView));
+  elements.layoutPanel.classList.toggle("view-draft", isDraftView);
+  elements.layoutPanel.classList.toggle("view-library", !isDraftView);
+
   applyLayoutSizing();
+  updatePhaseStrip();
   renderCategories();
   renderArchiveExplorer();
 }
@@ -534,6 +591,12 @@ function renderTabItem(item) {
   tagsInput.value = item.tags.join(", ");
   descriptionInput.value = item.description;
   summaryInput.value = item.summary;
+
+  const completionDot = tabNode.querySelector(".tab-completion-dot");
+  const completion = getTabCompletion(item);
+  tabNode.dataset.completion = completion;
+  const completionTitles = { pending: "Pending", ai: "AI filled", user: "Reviewed" };
+  completionDot.title = completionTitles[completion];
 
   const titleRow = tabNode.querySelector(".tab-title-row");
   const faviconImg = document.createElement("img");
@@ -1243,6 +1306,20 @@ function handleToggleSettings(event) {
 function handleToggleGeminiApiKeyVisibility() {
   state.geminiApiKeyVisible = !state.geminiApiKeyVisible;
   render();
+}
+
+function updatePhaseStrip() {
+  if (!elements.phaseStrip) {
+    return;
+  }
+
+  const PHASE_ORDER = ["capture", "review", "save"];
+  const currentIndex = PHASE_ORDER.indexOf(state.phase);
+
+  elements.phaseStrip.querySelectorAll(".phase-step").forEach((step, index) => {
+    step.classList.toggle("is-active", index === currentIndex);
+    step.classList.toggle("is-done", index < currentIndex);
+  });
 }
 
 function handleDocumentClick(event) {
@@ -2537,6 +2614,18 @@ function getErrorMessage(error, fallbackMessage) {
   }
 
   return fallbackMessage;
+}
+
+function getTabCompletion(item) {
+  const sources = normalizeDraftFieldSources(item);
+  const values = Object.values(sources);
+  if (values.some((s) => s === FIELD_SOURCES.user)) {
+    return "user";
+  }
+  if (values.some((s) => s === FIELD_SOURCES.ai)) {
+    return "ai";
+  }
+  return "pending";
 }
 
 async function finalizeBulkAiCategoryMerge() {
