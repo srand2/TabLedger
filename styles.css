@@ -1232,3 +1232,14 @@ body.is-resizing-layout * {
 .dashboard-shell[data-active-view="library"] .controls-panel {
   display: none;
 }
+
+/* === Post-save highlight === */
+@keyframes savedFlash {
+  0%   { box-shadow: 0 0 0 2px var(--success), 0 0 20px rgba(20, 184, 166, 0.25); }
+  60%  { box-shadow: 0 0 0 2px var(--success), 0 0 20px rgba(20, 184, 166, 0.25); }
+  100% { box-shadow: none; }
+}
+
+.history-card.just-saved {
+  animation: savedFlash 2s ease-out forwards;
+}

@@ -364,6 +364,25 @@ async function handleSaveBookmarks() {
     state.activeView = "library";
     await loadRecentArchives();
     render();
+
+    // Highlight newly saved session card
+    const savedTitle = response.result.sessionTitle;
+    if (savedTitle) {
+      const cards = document.querySelectorAll(".history-card");
+      const match = [...cards].find(
+        (c) => c.querySelector(".history-title-button")?.textContent === savedTitle
+      );
+      if (match) {
+        match.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        match.classList.add("just-saved");
+        match.addEventListener(
+          "animationend",
+          () => match.classList.remove("just-saved"),
+          { once: true }
+        );
+      }
+    }
+
     const skippedSummary = [];
     if (response.result.duplicateCounts?.withinSession) {
       skippedSummary.push(`${response.result.duplicateCounts.withinSession} duplicate${response.result.duplicateCounts.withinSession === 1 ? "" : "s"} in this session`);
