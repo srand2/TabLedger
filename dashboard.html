@@ -99,7 +99,7 @@
         <div class="hero-actions">
           <button id="scan-all" class="primary-button">Capture All Windows</button>
           <button id="proceed-to-save" class="primary-button" type="button">
-            Proceed to Save →
+            Name &amp; Save →
           </button>
           <button id="save-bookmarks" class="ghost-button" disabled>
             Save to Library
@@ -143,7 +143,7 @@
           </div>
           <div id="filter-query-field">
             <label class="field compact-search">
-              <span>Filter</span>
+              <span>Search Draft</span>
               <input
                 id="filter-query"
                 type="text"
@@ -162,7 +162,7 @@
             </div>
             <div>
               <strong id="skipped-count">0</strong>
-              <span>skipped</span>
+              <span title="URLs skipped due to duplicates or unsupported tab types (e.g. chrome://)">skipped</span>
             </div>
           </div>
         </div>
@@ -182,6 +182,7 @@
           role="tab"
           aria-selected="true"
           aria-controls="draft-pane"
+          aria-label="Switch to Draft view"
           type="button"
         >
           Draft
@@ -192,6 +193,7 @@
           role="tab"
           aria-selected="false"
           aria-controls="library-pane"
+          aria-label="Switch to Library view"
           type="button"
         >
           Library
