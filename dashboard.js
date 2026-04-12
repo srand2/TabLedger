@@ -224,6 +224,7 @@ async function restoreDraft() {
     : getAllCategoryNames(state.items);
 
   if (state.items.length) {
+    state.phase = "review";
     setStatus(`Restored ${state.items.length} tabs from the last draft.`, "success");
   }
 }
@@ -279,6 +280,7 @@ async function scanTabs() {
     }
 
     await persistDraft();
+    state.phase = "review";
     render();
 
     setStatus(
@@ -332,6 +334,7 @@ async function handleSaveBookmarks() {
     }
 
     await clearDraftState();
+    state.phase = "capture";
     await loadRecentArchives();
     render();
     const skippedSummary = [];
@@ -402,6 +405,7 @@ async function handleExportJson() {
 
 async function handleResetDraft() {
   await clearDraftState();
+  state.phase = "capture";
   render();
   setStatus("Cleared the current draft.", "success");
 }
