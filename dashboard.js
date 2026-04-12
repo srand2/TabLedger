@@ -85,6 +85,8 @@ const elements = {
   draftPane: document.getElementById("draft-pane"),
   libraryPane: document.getElementById("library-pane"),
   layoutResizer: document.getElementById("layout-resizer"),
+  viewTabDraftButton: document.getElementById("view-tab-draft"),
+  viewTabLibraryButton: document.getElementById("view-tab-library"),
   archiveFilterInput: document.getElementById("archive-filter"),
   archiveActiveFilters: document.getElementById("archive-active-filters"),
   archiveSummary: document.getElementById("archive-summary"),
@@ -202,6 +204,17 @@ function bindEvents() {
 
   elements.layoutResizer.addEventListener("pointerdown", handleResizerPointerDown);
   elements.layoutResizer.addEventListener("keydown", handleResizerKeyDown);
+
+  elements.viewTabDraftButton.addEventListener("click", () => {
+    state.activeView = "draft";
+    render();
+  });
+
+  elements.viewTabLibraryButton.addEventListener("click", () => {
+    state.activeView = "library";
+    render();
+  });
+
   window.addEventListener("resize", handleWindowResize);
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("keydown", handleDocumentKeydown);
@@ -447,6 +460,15 @@ function render() {
     "aria-pressed",
     String(state.geminiApiKeyVisible)
   );
+
+  // View tab state
+  const isDraftView = state.activeView === "draft";
+  elements.viewTabDraftButton.classList.toggle("is-active", isDraftView);
+  elements.viewTabDraftButton.setAttribute("aria-selected", String(isDraftView));
+  elements.viewTabLibraryButton.classList.toggle("is-active", !isDraftView);
+  elements.viewTabLibraryButton.setAttribute("aria-selected", String(!isDraftView));
+  elements.layoutPanel.classList.toggle("view-draft", isDraftView);
+  elements.layoutPanel.classList.toggle("view-library", !isDraftView);
 
   applyLayoutSizing();
   updatePhaseStrip();

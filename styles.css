@@ -1069,6 +1069,58 @@ body.is-resizing-layout * {
   max-width: 320px;
 }
 
+/* === View tab bar === */
+.view-tab-bar {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(11, 18, 32, 0.7);
+  align-self: flex-start;
+  width: fit-content;
+}
+
+.view-tab {
+  min-height: 28px;
+  padding: 4px 16px;
+  border-radius: 9px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.view-tab:hover:not(.is-active) {
+  background: rgba(31, 41, 55, 0.6);
+  color: var(--text);
+}
+
+.view-tab.is-active {
+  background: rgba(31, 41, 55, 0.9);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+/* Layout panel: show only the active view pane, full width */
+.layout-panel.view-draft,
+.layout-panel.view-library {
+  grid-template-columns: 1fr;
+}
+
+.layout-panel.view-draft .history-column,
+.layout-panel.view-draft .layout-resizer {
+  display: none;
+}
+
+.layout-panel.view-library .draft-column,
+.layout-panel.view-library .layout-resizer {
+  display: none;
+}
+
 /* === Phase-aware visibility === */
 
 /* Capture: only Capture All Windows visible in hero-actions */

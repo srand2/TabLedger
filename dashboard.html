@@ -129,6 +129,29 @@
         <p id="status-message" class="status-message" aria-live="polite"></p>
       </section>
 
+      <div class="view-tab-bar" role="tablist" aria-label="View selector">
+        <button
+          id="view-tab-draft"
+          class="view-tab"
+          role="tab"
+          aria-selected="true"
+          aria-controls="draft-pane"
+          type="button"
+        >
+          Draft
+        </button>
+        <button
+          id="view-tab-library"
+          class="view-tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="library-pane"
+          type="button"
+        >
+          Library
+        </button>
+      </div>
+
       <section id="layout-panel" class="panel layout-panel">
         <div id="draft-pane" class="draft-column">
           <div class="section-heading">
