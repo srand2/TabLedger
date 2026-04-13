@@ -48,6 +48,9 @@ const state = {
     tags: []
   },
   bulkAiRunning: false,
+  bulkAiPaused: false,
+  bulkAiCancelled: false,
+  bulkAiResumeResolve: null,
   editingArchiveItemKey: null,
   archiveItemEditor: null,
   libraryWidth: DEFAULT_LIBRARY_WIDTH,
@@ -75,6 +78,8 @@ const elements = {
   resetDraftButton: document.getElementById("reset-draft"),
   toggleDraftCollapseButton: document.getElementById("toggle-draft-collapse"),
   bulkFillAiButton: document.getElementById("bulk-fill-ai"),
+  bulkAiPauseButton: document.getElementById("bulk-ai-pause"),
+  bulkAiStopButton: document.getElementById("bulk-ai-stop"),
   settingsToggleButton: document.getElementById("settings-toggle"),
   settingsPanel: document.getElementById("settings-panel"),
   dedupeWithinSessionInput: document.getElementById("dedupe-within-session"),
@@ -179,6 +184,8 @@ function bindEvents() {
   elements.resetDraftButton.addEventListener("click", handleResetDraft);
   elements.toggleDraftCollapseButton.addEventListener("click", handleToggleDraftCollapse);
   elements.bulkFillAiButton.addEventListener("click", handleBulkFillWithAi);
+  elements.bulkAiPauseButton.addEventListener("click", handlePauseAi);
+  elements.bulkAiStopButton.addEventListener("click", handleStopAi);
   elements.settingsToggleButton.addEventListener("click", handleToggleSettings);
 
   elements.proceedToSaveButton.addEventListener("click", () => {
@@ -549,6 +556,11 @@ function render() {
   elements.bulkFillAiButton.innerHTML = state.bulkAiRunning
     ? '<span class="tab-ai-icon" aria-hidden="true">✦</span><span>Using AI...</span>'
     : '<span class="tab-ai-icon" aria-hidden="true">✦</span><span>Use AI</span>';
+  elements.bulkAiPauseButton.hidden = !state.bulkAiRunning;
+  elements.bulkAiStopButton.hidden = !state.bulkAiRunning;
+  if (state.bulkAiRunning) {
+    elements.bulkAiPauseButton.textContent = state.bulkAiPaused ? "▶ Resume" : "⏸ Pause";
+  }
   elements.settingsToggleButton.setAttribute("aria-expanded", String(state.settingsOpen));
   elements.settingsPanel.hidden = !state.settingsOpen;
   elements.dedupeWithinSessionInput.checked = state.settings.dedupeWithinSession;
@@ -1212,6 +1224,8 @@ async function handleBulkFillWithAi() {
   }
 
   state.bulkAiRunning = true;
+  state.bulkAiCancelled = false;
+  state.bulkAiPaused = false;
   render();
 
   const itemIds = state.items.map((item) => item.id);
@@ -1223,6 +1237,17 @@ async function handleBulkFillWithAi() {
 
   try {
     for (const itemId of itemIds) {
+      if (state.bulkAiCancelled) break;
+
+      if (state.bulkAiPaused) {
+        setStatus(`AI paused after ${completed} of ${itemIds.length} tabs — click Resume to continue.`);
+        await new Promise((resolve) => {
+          state.bulkAiResumeResolve = resolve;
+        });
+        state.bulkAiResumeResolve = null;
+        if (state.bulkAiCancelled) break;
+      }
+
       if (!getDraftItem(itemId)) {
         continue;
       }
@@ -1241,13 +1266,21 @@ async function handleBulkFillWithAi() {
       }
     }
 
-    if (succeeded) {
+    if (succeeded && !state.bulkAiCancelled) {
       const mergeResult = await finalizeBulkAiCategoryMerge();
       mergedCategoryCount += mergeResult.mergedCategoryCount;
     }
   } finally {
     state.bulkAiRunning = false;
+    state.bulkAiPaused = false;
+    state.bulkAiResumeResolve = null;
     render();
+  }
+
+  if (state.bulkAiCancelled) {
+    state.bulkAiCancelled = false;
+    setStatus(`AI stopped after ${completed} of ${itemIds.length} tabs. Updated ${updated}.`);
+    return;
   }
 
   if (failed) {
@@ -1259,6 +1292,29 @@ async function handleBulkFillWithAi() {
   }
 
   setStatus(formatBulkAiStatus(completed, updated, 0, mergedCategoryCount), "success");
+}
+
+function handlePauseAi() {
+  if (!state.bulkAiRunning) return;
+  if (state.bulkAiPaused) {
+    state.bulkAiPaused = false;
+    if (state.bulkAiResumeResolve) {
+      state.bulkAiResumeResolve();
+    }
+  } else {
+    state.bulkAiPaused = true;
+  }
+  render();
+}
+
+function handleStopAi() {
+  if (!state.bulkAiRunning) return;
+  state.bulkAiCancelled = true;
+  if (state.bulkAiPaused && state.bulkAiResumeResolve) {
+    state.bulkAiPaused = false;
+    state.bulkAiResumeResolve();
+  }
+  render();
 }
 
 async function runAiFillForItem(itemId) {
