@@ -151,6 +151,16 @@ extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "bulk-delete-archive-items") {
+    bulkDeleteArchiveItems(message.payload)
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => {
+        console.error("Failed to bulk delete archive items", error);
+        sendResponse({ ok: false, error: error.message });
+      });
+    return true;
+  }
+
   if (message?.type === "sync-now") {
     syncNow()
       .then((result) => sendResponse({ ok: true, result }))
@@ -473,6 +483,69 @@ async function deleteArchiveItem(payload) {
     deletedTitle: removedItem.title,
     remainingCount: session.items.length
   };
+}
+
+async function bulkDeleteArchiveItems(payload) {
+  // payload.items: [{ sessionId, bookmarkId, title, url }]
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  const savedSessions = await getStoredArray(SAVED_SESSIONS_KEY);
+  const metadataStore = await getStoredObject(BOOKMARK_METADATA_KEY);
+  const bookmarkIdsToRemove = [];
+  const categoryFolderIds = new Set();
+
+  for (const { sessionId, bookmarkId, title, url } of items) {
+    const session = savedSessions.find((s) => String(s.id) === String(sessionId));
+    if (!session || !Array.isArray(session.items)) continue;
+
+    const itemIndex = session.items.findIndex((item) =>
+      bookmarkId
+        ? String(item.bookmarkId || "") === String(bookmarkId)
+        : item.url === url && item.title === title
+    );
+    if (itemIndex === -1) continue;
+
+    const [removedItem] = session.items.splice(itemIndex, 1);
+    if (removedItem.bookmarkId) {
+      bookmarkIdsToRemove.push(String(removedItem.bookmarkId));
+      delete metadataStore[removedItem.bookmarkId];
+      session.bookmarkIds = (session.bookmarkIds || []).filter(
+        (id) => String(id) !== String(removedItem.bookmarkId)
+      );
+      if (removedItem.bookmarkFolderId) {
+        categoryFolderIds.add(String(removedItem.bookmarkFolderId));
+      }
+    }
+    session.tabCount = session.items.length;
+    session.categories = [...new Set(session.items.map((item) => item.category))].sort();
+    session.categoryCount = session.categories.length;
+    session.categoryMeta = ensureCategoryMeta(session).filter((entry) =>
+      session.categories.includes(entry.name)
+    );
+  }
+
+  // Remove individual bookmarks first
+  await removeBookmarkNodes(bookmarkIdsToRemove);
+
+  // Clean up category folders that became empty
+  for (const folderId of categoryFolderIds) {
+    await removeBookmarkFolderIfEmpty(folderId);
+  }
+
+  // Delete entire sessions that are now empty
+  const emptySessions = savedSessions.filter((s) => !s.items.length);
+  for (const emptySession of emptySessions) {
+    await removeBookmarkTree(String(emptySession.id));
+    removeMetadataEntries(metadataStore, String(emptySession.id), emptySession.title);
+  }
+
+  const updatedSessions = savedSessions.filter((s) => s.items.length > 0);
+
+  await extensionApi.storage.local.set({
+    [BOOKMARK_METADATA_KEY]: metadataStore,
+    [SAVED_SESSIONS_KEY]: updatedSessions
+  });
+
+  return { deletedTabCount: bookmarkIdsToRemove.length, deletedSessionCount: emptySessions.length };
 }
 
 async function updateArchiveItem(payload) {

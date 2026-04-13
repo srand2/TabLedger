@@ -988,6 +988,18 @@ function renderArchiveActiveFilters() {
     elements.archiveActiveFilters.appendChild(chip);
   }
 
+  const archiveView = getArchiveView();
+  const filteredTabCount = archiveView.sessions.reduce((sum, s) => sum + s.items.length, 0);
+
+  if (filteredTabCount > 0) {
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "ghost-button small-button danger-button";
+    deleteButton.textContent = `Delete ${filteredTabCount} tab${filteredTabCount === 1 ? "" : "s"}`;
+    deleteButton.addEventListener("click", handleDeleteFilteredTabs);
+    elements.archiveActiveFilters.appendChild(deleteButton);
+  }
+
   const clearButton = document.createElement("button");
   clearButton.type = "button";
   clearButton.className = "ghost-button small-button";
@@ -1872,6 +1884,57 @@ async function handleDeleteSelectedSessions() {
   }
   const partialNote = deletedCount < ids.length ? ` (${ids.length - deletedCount} failed)` : "";
   setStatus(`Deleted ${deletedCount} session${deletedCount === 1 ? "" : "s"} from the Browsing Library${partialNote}.`, "success");
+}
+
+async function handleDeleteFilteredTabs() {
+  const archiveView = getArchiveView();
+  const totalTabs = archiveView.sessions.reduce((sum, s) => sum + s.items.length, 0);
+  const sessionCount = archiveView.sessions.length;
+
+  if (totalTabs === 0) return;
+
+  const confirmed = window.confirm(
+    `Delete ${totalTabs} tab${totalTabs === 1 ? "" : "s"} across ${sessionCount} session${sessionCount === 1 ? "" : "s"}? Sessions left empty will also be removed.`
+  );
+  if (!confirmed) return;
+
+  const itemsToDelete = [];
+  for (const session of archiveView.sessions) {
+    for (const item of session.items) {
+      itemsToDelete.push({
+        sessionId: session.id,
+        bookmarkId: item.bookmarkId || null,
+        title: item.title,
+        url: item.url
+      });
+    }
+  }
+
+  try {
+    const response = await extensionApi.runtime.sendMessage({
+      type: "bulk-delete-archive-items",
+      payload: { items: itemsToDelete }
+    });
+
+    if (!response?.ok) {
+      setStatus(response?.error || "Could not delete tabs from the Browsing Library.", "error");
+      return;
+    }
+
+    const { deletedTabCount, deletedSessionCount } = response.result;
+    clearArchiveFilters();
+    state.archiveFilterQuery = "";
+    elements.archiveFilterInput.value = "";
+    await loadRecentArchives();
+    render();
+    const sessionNote = deletedSessionCount ? `, removed ${deletedSessionCount} empty session${deletedSessionCount === 1 ? "" : "s"}` : "";
+    setStatus(`Deleted ${deletedTabCount} tab${deletedTabCount === 1 ? "" : "s"}${sessionNote}.`, "success");
+  } catch (error) {
+    setStatus(
+      error instanceof Error ? error.message : "Could not delete tabs from the Browsing Library.",
+      "error"
+    );
+  }
 }
 
 async function handleDeleteArchiveItem(session, item) {
