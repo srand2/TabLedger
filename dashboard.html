@@ -331,11 +331,22 @@
           <div id="archive-summary" class="archive-summary">
             <p class="history-meta">Saved sessions will appear here after you add them to the Browsing Library.</p>
           </div>
+          <div id="library-select-all-row" class="library-select-all-row" hidden>
+            <label class="select-all-label">
+              <input type="checkbox" id="select-all-sessions" />
+              <span>Select all</span>
+            </label>
+          </div>
           <div id="recent-archives" class="history-list">
             <div class="empty-state compact-empty">
               <h3>No library entries yet</h3>
               <p>Save a session to the Browsing Library so you can reopen those tabs later.</p>
             </div>
+          </div>
+          <div id="bulk-delete-bar" class="bulk-delete-bar" hidden>
+            <span id="bulk-delete-count" class="bulk-delete-count"></span>
+            <button id="bulk-delete-confirm" class="danger-button small-button" type="button">Delete selected</button>
+            <button id="bulk-delete-cancel" class="ghost-button small-button" type="button">Clear selection</button>
           </div>
         </aside>
       </section>

@@ -67,7 +67,8 @@ const state = {
   importEnrichmentTotal: 0,
   importEnrichmentDone: 0,
   syncRunning: false,
-  libraryInitialized: false
+  libraryInitialized: false,
+  selectedSessionIds: new Set()
 };
 
 const elements = {
@@ -109,7 +110,13 @@ const elements = {
   skippedCount: document.getElementById("skipped-count"),
   statusMessage: document.getElementById("status-message"),
   categories: document.getElementById("categories"),
+  librarySelectAllRow: document.getElementById("library-select-all-row"),
+  selectAllSessionsCheckbox: document.getElementById("select-all-sessions"),
   recentArchives: document.getElementById("recent-archives"),
+  bulkDeleteBar: document.getElementById("bulk-delete-bar"),
+  bulkDeleteCount: document.getElementById("bulk-delete-count"),
+  bulkDeleteConfirmButton: document.getElementById("bulk-delete-confirm"),
+  bulkDeleteCancelButton: document.getElementById("bulk-delete-cancel"),
   categoryTemplate: document.getElementById("category-template"),
   tabTemplate: document.getElementById("tab-template"),
   historyTemplate: document.getElementById("history-template"),
@@ -231,6 +238,27 @@ function bindEvents() {
       addArchiveValueFilter("tags", value);
       renderArchiveExplorer();
     }
+  });
+
+  elements.selectAllSessionsCheckbox.addEventListener("change", (event) => {
+    const archiveView = getArchiveView();
+    if (event.target.checked) {
+      for (const session of archiveView.sessions) {
+        state.selectedSessionIds.add(session.id);
+      }
+    } else {
+      for (const session of archiveView.sessions) {
+        state.selectedSessionIds.delete(session.id);
+      }
+    }
+    renderArchiveExplorer();
+  });
+
+  elements.bulkDeleteConfirmButton.addEventListener("click", handleDeleteSelectedSessions);
+
+  elements.bulkDeleteCancelButton.addEventListener("click", () => {
+    state.selectedSessionIds.clear();
+    renderArchiveExplorer();
   });
 
   elements.dedupeWithinSessionInput.addEventListener("change", (event) => {
@@ -861,6 +889,8 @@ function renderArchiveExplorer() {
         <p>Save a session to the Browsing Library so you can browse saved tabs and reopen them later.</p>
       </div>
     `;
+    elements.librarySelectAllRow.hidden = true;
+    elements.bulkDeleteBar.hidden = true;
     return;
   }
 
@@ -871,11 +901,32 @@ function renderArchiveExplorer() {
         <p>Try a broader library filter to see sessions, categories, or matching tabs.</p>
       </div>
     `;
+    elements.librarySelectAllRow.hidden = true;
+    elements.bulkDeleteBar.hidden = true;
     return;
   }
 
   for (const archive of archiveView.sessions) {
     elements.recentArchives.appendChild(renderArchiveSession(archive));
+  }
+
+  const visibleSessionIds = archiveView.sessions.map((s) => s.id);
+  const hasVisibleSessions = visibleSessionIds.length > 0;
+  const selectedCount = [...state.selectedSessionIds].filter((id) =>
+    visibleSessionIds.includes(id)
+  ).length;
+
+  elements.librarySelectAllRow.hidden = !hasVisibleSessions;
+  if (hasVisibleSessions) {
+    elements.selectAllSessionsCheckbox.checked = selectedCount === visibleSessionIds.length;
+    elements.selectAllSessionsCheckbox.indeterminate =
+      selectedCount > 0 && selectedCount < visibleSessionIds.length;
+  }
+
+  const totalSelected = state.selectedSessionIds.size;
+  elements.bulkDeleteBar.hidden = totalSelected === 0;
+  if (totalSelected > 0) {
+    elements.bulkDeleteCount.textContent = `${totalSelected} session${totalSelected === 1 ? "" : "s"} selected`;
   }
 }
 
@@ -1002,6 +1053,22 @@ function renderArchiveSummary(archiveView) {
 
 function renderArchiveSession(session) {
   const node = elements.historyTemplate.content.firstElementChild.cloneNode(true);
+
+  const sessionCheckbox = document.createElement("input");
+  sessionCheckbox.type = "checkbox";
+  sessionCheckbox.className = "session-select-checkbox";
+  sessionCheckbox.setAttribute("aria-label", `Select session ${session.title}`);
+  sessionCheckbox.checked = state.selectedSessionIds.has(session.id);
+  sessionCheckbox.addEventListener("change", () => {
+    if (sessionCheckbox.checked) {
+      state.selectedSessionIds.add(session.id);
+    } else {
+      state.selectedSessionIds.delete(session.id);
+    }
+    renderArchiveExplorer();
+  });
+  node.querySelector(".history-session-main").prepend(sessionCheckbox);
+
   const sessionToggle = node.querySelector(".history-session-toggle");
   const toggleGlyph = node.querySelector(".toggle-glyph");
   const titleNode = node.querySelector(".history-title");
@@ -1767,6 +1834,44 @@ async function handleDeleteArchiveSession(session) {
       "error"
     );
   }
+}
+
+async function handleDeleteSelectedSessions() {
+  const count = state.selectedSessionIds.size;
+  if (count === 0) return;
+
+  const confirmed = window.confirm(
+    `Delete ${count} session${count === 1 ? "" : "s"}? This will permanently remove ${count === 1 ? "it" : "them"} from your Browsing Library.`
+  );
+  if (!confirmed) return;
+
+  const ids = [...state.selectedSessionIds];
+  let deletedCount = 0;
+
+  for (const sessionId of ids) {
+    const session = state.recentArchives.find((s) => String(s.id) === String(sessionId));
+    if (!session) continue;
+
+    try {
+      const response = await extensionApi.runtime.sendMessage({
+        type: "delete-archive-session",
+        payload: { sessionId: session.id, sessionTitle: session.title }
+      });
+      if (response?.ok) deletedCount += 1;
+    } catch (error) {
+      console.error("Failed to delete session", sessionId, error);
+    }
+  }
+
+  state.selectedSessionIds.clear();
+  await loadRecentArchives();
+  render();
+  if (deletedCount === 0) {
+    setStatus("Could not delete the selected sessions from the Browsing Library.", "error");
+    return;
+  }
+  const partialNote = deletedCount < ids.length ? ` (${ids.length - deletedCount} failed)` : "";
+  setStatus(`Deleted ${deletedCount} session${deletedCount === 1 ? "" : "s"} from the Browsing Library${partialNote}.`, "success");
 }
 
 async function handleDeleteArchiveItem(session, item) {
