@@ -3207,6 +3207,15 @@ async function handleImportRun() {
 
     await loadRecentArchives();
     renderArchiveExplorer();
+
+    // Auto-close the panel to reveal the library
+    if (!useAi) {
+      state.importOpen = false;
+      elements.importPanel.hidden = true;
+      elements.importToggleButton.setAttribute("aria-expanded", "false");
+      elements.importToggleButton.textContent = "↓ Import";
+    }
+    // When AI is running, keep panel open to show progress
   } catch (err) {
     setStatus(`Import failed: ${err.message}`, "error");
     elements.importProgress.hidden = true;
