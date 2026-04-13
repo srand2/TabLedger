@@ -739,7 +739,9 @@ async function updateArchiveCategory(payload) {
 
 const TRACKING_PARAMS = new Set([
   "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-  "fbclid", "gclid", "_ga", "_gid", "ref", "mc_cid", "mc_eid"
+  "fbclid", "gclid", "_ga", "_gid",
+  "ref",      // broad — may false-positive on GitHub branch URLs (ref=branchname)
+  "mc_cid", "mc_eid"
 ]);
 
 function normalizeArchiveUrl(url) {
@@ -763,6 +765,7 @@ function normalizeArchiveUrl(url) {
   parsed.searchParams.sort();
 
   const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  // Path casing is intentionally preserved — RFC 3986 treats paths as case-sensitive
   // Strip trailing slash from path (root "/" becomes empty string)
   const path = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/$/, "");
   const query = parsed.search; // e.g. "?q=hello" or "" — fragment already absent
@@ -849,7 +852,6 @@ function buildExistingLibraryUrlSet(savedSessions, metadataStore) {
 
   return urls;
 }
-
 
 function getArchiveMetadataEntry(metadataStore, sessionId, bookmarkId, url, title) {
   if (bookmarkId && metadataStore[bookmarkId]) {

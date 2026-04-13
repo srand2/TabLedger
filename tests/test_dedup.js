@@ -189,6 +189,11 @@ assertEqual(
   normalizeArchiveUrl("not-a-url"),
   "not-a-url"
 );
+assertEqual(
+  "URL with only tracking params normalizes same as bare root URL",
+  normalizeArchiveUrl("https://example.com/?utm_source=ads"),
+  "example.com"
+);
 
 // ---- getUniqueUrls (keep in sync with background.js) ----
 
@@ -255,6 +260,11 @@ assertEqual(
   "output URLs are originals (not normalized keys)",
   getUniqueUrls(["https://example.com/page"])[0],
   "https://example.com/page"
+);
+assertEqual(
+  "non-URL strings are case-folded for dedup",
+  JSON.stringify(getUniqueUrls(["Not-A-URL", "not-a-url"])),
+  JSON.stringify(["Not-A-URL"])
 );
 
 // ---- Summary ----
