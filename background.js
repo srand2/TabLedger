@@ -793,35 +793,64 @@ function getUniqueUrls(urls) {
   return uniqueUrls;
 }
 
+function scoreItemEnrichment(item) {
+  const sources = item?.fieldSources;
+  if (!sources || typeof sources !== "object") return 0;
+  let score = 0;
+  for (const field of ["category", "tags", "description", "summary"]) {
+    if (sources[field] === "user") score += 3;
+    else if (sources[field] === "ai") score += 2;
+    else if (sources[field] === "heuristic") score += 1;
+  }
+  return score;
+}
+
 function buildArchiveItemsForSave(items, savedSessions, metadataStore, settings) {
   const duplicateCounts = {
     withinSession: 0,
     acrossSessions: 0
   };
-  const seenInSession = new Set();
   const existingLibraryUrls = settings.dedupeAcrossSessions
     ? buildExistingLibraryUrlSet(savedSessions, metadataStore)
     : new Set();
+
+  // Step 1: Within-session dedup — group by normalized URL, keep highest-scored item.
+  // Output order matches first-occurrence position of each URL in the input.
+  let workingItems = items;
+  if (settings.dedupeWithinSession) {
+    const bestByUrl = new Map(); // normalizedUrl → best item so far
+    for (const item of items) {
+      const normalizedUrl = normalizeArchiveUrl(item.url);
+      if (!normalizedUrl) continue;
+      const current = bestByUrl.get(normalizedUrl);
+      if (!current || scoreItemEnrichment(item) > scoreItemEnrichment(current)) {
+        bestByUrl.set(normalizedUrl, item);
+      }
+    }
+    // Reconstruct in first-occurrence order
+    const seenUrls = new Set();
+    const deduped = [];
+    for (const item of items) {
+      const normalizedUrl = normalizeArchiveUrl(item.url);
+      if (!normalizedUrl) continue;
+      if (seenUrls.has(normalizedUrl)) continue;
+      seenUrls.add(normalizedUrl);
+      deduped.push(bestByUrl.get(normalizedUrl)); // push the best item for this URL
+    }
+    const totalWithUrls = items.filter((i) => normalizeArchiveUrl(i.url)).length;
+    duplicateCounts.withinSession = totalWithUrls - deduped.length;
+    workingItems = deduped;
+  }
+
+  // Step 2: Across-sessions dedup — skip URLs already saved in the library.
   const filteredItems = [];
-
-  for (const item of items) {
+  for (const item of workingItems) {
     const normalizedUrl = normalizeArchiveUrl(item.url);
-    if (!normalizedUrl) {
-      continue;
-    }
-
-    if (settings.dedupeWithinSession && seenInSession.has(normalizedUrl)) {
-      duplicateCounts.withinSession += 1;
-      continue;
-    }
-
-    seenInSession.add(normalizedUrl);
-
+    if (!normalizedUrl) continue;
     if (settings.dedupeAcrossSessions && existingLibraryUrls.has(normalizedUrl)) {
       duplicateCounts.acrossSessions += 1;
       continue;
     }
-
     filteredItems.push(item);
   }
 
