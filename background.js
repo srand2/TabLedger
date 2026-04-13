@@ -3,6 +3,10 @@ const extensionApi = globalThis.browser ?? chrome;
 const ROOT_FOLDER_TITLE = "Browsing Library";
 const BOOKMARK_METADATA_KEY = "bookmarkMetadata";
 const SAVED_SESSIONS_KEY = "savedSessions";
+const AI_ENRICHMENT_QUEUE_KEY = "aiEnrichmentQueue";
+const SYNC_KEY_PREFIX = "sync:session:";
+const SYNC_INDEX_KEY = "sync:index";
+const DEVICE_ID_KEY = "deviceId";
 const SETTINGS_KEY = "tabLedgerSettings";
 const DEFAULT_SETTINGS = {
   dedupeWithinSession: false,
@@ -105,6 +109,46 @@ extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
       });
 
+    return true;
+  }
+
+  if (message?.type === "get-bookmark-folders") {
+    getBookmarkFolders()
+      .then((folders) => sendResponse({ ok: true, folders }))
+      .catch((error) => {
+        console.error("Failed to get bookmark folders", error);
+        sendResponse({ ok: false, error: error.message });
+      });
+    return true;
+  }
+
+  if (message?.type === "import-bookmarks") {
+    importBookmarksAsSession(message.payload)
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => {
+        console.error("Failed to import bookmarks", error);
+        sendResponse({ ok: false, error: error.message });
+      });
+    return true;
+  }
+
+  if (message?.type === "retry-ai-enrichment") {
+    retryAiEnrichment(message.payload?.sessionId)
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => {
+        console.error("Failed to retry AI enrichment", error);
+        sendResponse({ ok: false, error: error.message });
+      });
+    return true;
+  }
+
+  if (message?.type === "sync-now") {
+    syncNow()
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => {
+        console.error("Sync failed", error);
+        sendResponse({ ok: false, error: error.message });
+      });
     return true;
   }
 
@@ -216,7 +260,7 @@ async function createBookmarkArchive(payload) {
 
   await extensionApi.storage.local.set({
     [BOOKMARK_METADATA_KEY]: metadataStore,
-    [SAVED_SESSIONS_KEY]: savedSessions.slice(0, 20)
+    [SAVED_SESSIONS_KEY]: savedSessions
   });
 
   return {
@@ -557,7 +601,6 @@ async function updateArchiveCategory(payload) {
     await renameBookmarkFolders(folderIds, nextName);
   }
 
-  const existingMeta = session.categoryMeta.find((entry) => entry.name === previousName);
   const duplicateMeta = session.categoryMeta.find(
     (entry) => entry.name === nextName && entry.name !== previousName
   );
@@ -861,4 +904,424 @@ async function getStoredSettings() {
     dedupeWithinSession: Boolean(value.dedupeWithinSession),
     dedupeAcrossSessions: Boolean(value.dedupeAcrossSessions)
   };
+}
+
+// ── Device ID ─────────────────────────────────────────────────────────────────
+
+async function getDeviceId() {
+  const stored = await extensionApi.storage.local.get(DEVICE_ID_KEY);
+  if (stored[DEVICE_ID_KEY]) return stored[DEVICE_ID_KEY];
+  const deviceId = `device-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  await extensionApi.storage.local.set({ [DEVICE_ID_KEY]: deviceId });
+  return deviceId;
+}
+
+// ── Bookmark folder listing ───────────────────────────────────────────────────
+
+async function getBookmarkFolders() {
+  const tree = await extensionApi.bookmarks.getTree();
+  const folders = [];
+  const SKIP_TITLES = new Set(["Bookmarks Bar", "Other Bookmarks", "Mobile Bookmarks"]);
+
+  function walk(node, depth) {
+    if (node.url) return;
+    if (depth > 0 && !SKIP_TITLES.has(node.title)) {
+      folders.push({
+        id: node.id,
+        title: node.title || "Untitled",
+        depth,
+        childCount: (node.children || []).filter((c) => c.url).length
+      });
+    }
+    for (const child of node.children || []) {
+      walk(child, depth + 1);
+    }
+  }
+
+  walk(tree[0], 0);
+  return folders;
+}
+
+// ── Bookmark import ───────────────────────────────────────────────────────────
+
+async function importBookmarksAsSession({ folderId = null, useAi = false } = {}) {
+  const tree = await extensionApi.bookmarks.getTree();
+  const root = folderId
+    ? (await extensionApi.bookmarks.getSubTree(folderId))[0]
+    : tree[0];
+
+  const sessions = buildSessionsFromNode(root);
+  if (!sessions.length) {
+    throw new Error("No bookmark folders found to import.");
+  }
+
+  const savedSessions = await getStoredArray(SAVED_SESSIONS_KEY);
+  const metadataStore = await getStoredObject(BOOKMARK_METADATA_KEY);
+  const archivedAt = new Date().toISOString();
+  const newSessionIds = [];
+
+  for (const session of sessions) {
+    const archiveRoot = await ensureArchiveRoot();
+    const sessionTitle = buildSessionTitle(session.name);
+    const sessionFolder = await extensionApi.bookmarks.create({
+      parentId: archiveRoot.id,
+      title: sessionTitle
+    });
+
+    const groupedItems = groupByCategory(session.items);
+    const createdBookmarkIds = [];
+    const archivedItems = [];
+
+    for (const [categoryName, items] of groupedItems.entries()) {
+      const categoryFolder = await extensionApi.bookmarks.create({
+        parentId: sessionFolder.id,
+        title: categoryName
+      });
+
+      for (const item of items) {
+        const bookmarkNode = await extensionApi.bookmarks.create({
+          parentId: categoryFolder.id,
+          title: item.title,
+          url: item.url
+        });
+
+        metadataStore[bookmarkNode.id] = {
+          bookmarkId: bookmarkNode.id,
+          bookmarkFolderId: categoryFolder.id,
+          sessionFolderId: sessionFolder.id,
+          sessionTitle,
+          category: categoryName,
+          title: item.title,
+          linkUrl: item.url,
+          hostname: item.hostname,
+          capturedAt: item.capturedAt || archivedAt,
+          archivedAt,
+          description: "",
+          summary: "",
+          tags: []
+        };
+
+        archivedItems.push({
+          bookmarkId: bookmarkNode.id,
+          bookmarkFolderId: categoryFolder.id,
+          sessionFolderId: sessionFolder.id,
+          title: item.title,
+          url: item.url,
+          hostname: item.hostname,
+          category: categoryName,
+          capturedAt: item.capturedAt || archivedAt,
+          archivedAt,
+          description: "",
+          summary: "",
+          tags: []
+        });
+
+        createdBookmarkIds.push(bookmarkNode.id);
+      }
+    }
+
+    const sessionRecord = {
+      id: sessionFolder.id,
+      title: sessionTitle,
+      createdAt: archivedAt,
+      tabCount: archivedItems.length,
+      categoryCount: groupedItems.size,
+      bookmarkIds: createdBookmarkIds,
+      categories: [...groupedItems.keys()],
+      categoryMeta: [...groupedItems.keys()].map((name) => ({ name, description: "", tags: [] })),
+      items: archivedItems,
+      aiEnrichmentStatus: useAi ? "pending" : "done"
+    };
+
+    savedSessions.unshift(sessionRecord);
+    newSessionIds.push(sessionFolder.id);
+  }
+
+  await extensionApi.storage.local.set({
+    [BOOKMARK_METADATA_KEY]: metadataStore,
+    [SAVED_SESSIONS_KEY]: savedSessions
+  });
+
+  if (useAi && newSessionIds.length > 0) {
+    const queue = await getStoredArray(AI_ENRICHMENT_QUEUE_KEY);
+    await extensionApi.storage.local.set({
+      [AI_ENRICHMENT_QUEUE_KEY]: [...queue, ...newSessionIds]
+    });
+    drainAiEnrichmentQueue();
+  }
+
+  return {
+    importedCount: sessions.length,
+    totalBookmarks: sessions.reduce((sum, s) => sum + s.items.length, 0)
+  };
+}
+
+function buildSessionsFromNode(rootNode) {
+  const SKIP_TITLES = new Set(["Bookmarks Bar", "Other Bookmarks", "Mobile Bookmarks"]);
+  const sessions = [];
+
+  function walkFolder(node, parentIsRoot) {
+    if (node.url) return;
+    if (SKIP_TITLES.has(node.title) && !parentIsRoot) return;
+
+    const directBookmarks = (node.children || []).filter((c) => c.url);
+    const subFolders = (node.children || []).filter((c) => !c.url);
+
+    if (directBookmarks.length > 0 && !parentIsRoot) {
+      sessions.push({
+        name: node.title || "Loose Bookmarks",
+        items: directBookmarks.map((b) => ({
+          title: b.title || "Untitled",
+          url: b.url,
+          hostname: safeHostname(b.url),
+          category: node.title || "Uncategorized",
+          capturedAt: b.dateAdded ? new Date(b.dateAdded).toISOString() : new Date().toISOString(),
+          description: "",
+          summary: "",
+          tags: []
+        }))
+      });
+    }
+
+    // Collect loose bookmarks at true root into "Loose Bookmarks"
+    if (parentIsRoot && directBookmarks.length > 0) {
+      sessions.push({
+        name: "Loose Bookmarks",
+        items: directBookmarks.map((b) => ({
+          title: b.title || "Untitled",
+          url: b.url,
+          hostname: safeHostname(b.url),
+          category: "Uncategorized",
+          capturedAt: b.dateAdded ? new Date(b.dateAdded).toISOString() : new Date().toISOString(),
+          description: "",
+          summary: "",
+          tags: []
+        }))
+      });
+    }
+
+    for (const child of subFolders) {
+      walkFolder(child, false);
+    }
+  }
+
+  walkFolder(rootNode, true);
+  return sessions;
+}
+
+function safeHostname(url) {
+  try {
+    return new URL(url).hostname;
+  } catch (_e) {
+    return "unknown";
+  }
+}
+
+// ── AI enrichment queue ───────────────────────────────────────────────────────
+
+async function drainAiEnrichmentQueue() {
+  const queue = await getStoredArray(AI_ENRICHMENT_QUEUE_KEY);
+  if (!queue.length) return;
+
+  const settings = await extensionApi.storage.local.get(SETTINGS_KEY);
+  const apiKey = settings[SETTINGS_KEY]?.geminiApiKey;
+  const model = settings[SETTINGS_KEY]?.geminiModel || "gemini-2.5-flash";
+
+  for (const sessionId of queue) {
+    await enrichSessionWithAi(sessionId, apiKey, model);
+
+    // Remove processed ID from queue
+    const remaining = await getStoredArray(AI_ENRICHMENT_QUEUE_KEY);
+    await extensionApi.storage.local.set({
+      [AI_ENRICHMENT_QUEUE_KEY]: remaining.filter((id) => id !== sessionId)
+    });
+  }
+}
+
+async function enrichSessionWithAi(sessionId, apiKey, model) {
+  const savedSessions = await getStoredArray(SAVED_SESSIONS_KEY);
+  const session = savedSessions.find((s) => String(s.id) === String(sessionId));
+  if (!session) return;
+
+  if (!apiKey) {
+    markEnrichmentStatus(savedSessions, sessionId, "failed");
+    await extensionApi.storage.local.set({ [SAVED_SESSIONS_KEY]: savedSessions });
+    return;
+  }
+
+  try {
+    const items = session.items || [];
+    const prompt = buildEnrichmentPrompt(session.title, items);
+    const rawResponse = await callGeminiApi(prompt, apiKey, model);
+    const suggestions = parseEnrichmentResponse(rawResponse);
+
+    const metadataStore = await getStoredObject(BOOKMARK_METADATA_KEY);
+
+    for (const item of items) {
+      const suggestion = suggestions.find((s) => s.url === item.url);
+      if (!suggestion) continue;
+      if (suggestion.category) item.category = suggestion.category;
+      if (Array.isArray(suggestion.tags)) item.tags = suggestion.tags;
+
+      const meta = metadataStore[item.bookmarkId];
+      if (meta) {
+        if (suggestion.category) meta.category = suggestion.category;
+        if (Array.isArray(suggestion.tags)) meta.tags = suggestion.tags;
+      }
+    }
+
+    session.categories = [...new Set(items.map((i) => i.category))].sort();
+    session.categoryCount = session.categories.length;
+    session.categoryMeta = session.categories.map((name) => ({ name, description: "", tags: [] }));
+    markEnrichmentStatus(savedSessions, sessionId, "done");
+
+    await extensionApi.storage.local.set({
+      [SAVED_SESSIONS_KEY]: savedSessions,
+      [BOOKMARK_METADATA_KEY]: metadataStore
+    });
+  } catch (err) {
+    console.error("AI enrichment failed for session", sessionId, err);
+    markEnrichmentStatus(savedSessions, sessionId, "failed");
+    await extensionApi.storage.local.set({ [SAVED_SESSIONS_KEY]: savedSessions });
+  }
+}
+
+function markEnrichmentStatus(sessions, sessionId, status) {
+  const session = sessions.find((s) => String(s.id) === String(sessionId));
+  if (session) session.aiEnrichmentStatus = status;
+}
+
+function buildEnrichmentPrompt(sessionTitle, items) {
+  const list = items.map((i) => `- ${i.title}: ${i.url}`).join("\n");
+  return `You are categorizing browser bookmarks from a session called "${sessionTitle}".
+For each bookmark, suggest: (1) a specific category (2–3 words max), (2) 2–4 short tags relevant to what the page is actually about.
+Return a JSON array only, no prose: [{"url":"...","category":"...","tags":["...","..."]}]
+
+Bookmarks:
+${list}`;
+}
+
+function parseEnrichmentResponse(raw) {
+  try {
+    const match = raw.match(/\[[\s\S]*\]/);
+    return match ? JSON.parse(match[0]) : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+async function retryAiEnrichment(sessionId) {
+  if (!sessionId) throw new Error("Session ID required");
+  const queue = await getStoredArray(AI_ENRICHMENT_QUEUE_KEY);
+  if (!queue.includes(sessionId)) {
+    await extensionApi.storage.local.set({
+      [AI_ENRICHMENT_QUEUE_KEY]: [...queue, sessionId]
+    });
+    const savedSessions = await getStoredArray(SAVED_SESSIONS_KEY);
+    markEnrichmentStatus(savedSessions, sessionId, "pending");
+    await extensionApi.storage.local.set({ [SAVED_SESSIONS_KEY]: savedSessions });
+  }
+  drainAiEnrichmentQueue();
+  return { queued: true };
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+
+async function syncNow() {
+  const savedSessions = await getStoredArray(SAVED_SESSIONS_KEY);
+  const deviceId = await getDeviceId();
+
+  // Push all local sessions to sync storage
+  const localIds = savedSessions.map((s) => String(s.id));
+  let pushed = 0;
+
+  for (const session of savedSessions) {
+    const key = SYNC_KEY_PREFIX + session.id;
+    const allTags = [...new Set((session.items || []).flatMap((i) => i.tags || []))];
+    const lightSession = {
+      id: String(session.id),
+      title: session.title,
+      createdAt: session.createdAt,
+      deviceId,
+      categories: session.categories || [],
+      tags: allTags,
+      urls: (session.items || []).map((i) => i.url)
+    };
+
+    const serialized = JSON.stringify(lightSession);
+    if (serialized.length > 8000) {
+      // Trim URLs to fit — keep metadata intact
+      lightSession.urls = lightSession.urls.slice(0, Math.floor(8000 / serialized.length * lightSession.urls.length));
+    }
+
+    await extensionApi.storage.sync.set({ [key]: lightSession });
+    pushed++;
+  }
+
+  await extensionApi.storage.sync.set({ [SYNC_INDEX_KEY]: localIds });
+
+  // Pull sessions from other devices
+  const syncData = await extensionApi.storage.sync.get(null);
+  const remoteKeys = Object.keys(syncData).filter(
+    (k) => k.startsWith(SYNC_KEY_PREFIX)
+  );
+  let pulled = 0;
+
+  for (const key of remoteKeys) {
+    const remote = syncData[key];
+    if (!remote || remote.deviceId === deviceId) continue;
+    if (localIds.includes(String(remote.id))) continue;
+
+    // Import lightweight remote session into local storage
+    const remoteSession = {
+      id: remote.id,
+      title: remote.title,
+      createdAt: remote.createdAt,
+      tabCount: remote.urls.length,
+      categoryCount: remote.categories.length,
+      bookmarkIds: [],
+      categories: remote.categories,
+      categoryMeta: remote.categories.map((name) => ({ name, description: "", tags: [] })),
+      items: remote.urls.map((url) => ({
+        title: url,
+        url,
+        hostname: safeHostname(url),
+        category: remote.categories[0] || "Synced",
+        tags: [],
+        description: "",
+        summary: "",
+        capturedAt: remote.createdAt,
+        archivedAt: new Date().toISOString()
+      })),
+      aiEnrichmentStatus: "done",
+      syncedFrom: remote.deviceId
+    };
+
+    savedSessions.unshift(remoteSession);
+    pulled++;
+  }
+
+  if (pulled > 0) {
+    await extensionApi.storage.local.set({ [SAVED_SESSIONS_KEY]: savedSessions });
+  }
+
+  return { pushed, pulled };
+}
+
+async function callGeminiApi(prompt, apiKey, model) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }]
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gemini API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }

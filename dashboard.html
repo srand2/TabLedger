@@ -246,7 +246,69 @@
               <p class="eyebrow">Browsing Library</p>
               <h2 tabindex="-1">Library Explorer</h2>
             </div>
+            <div class="library-actions">
+              <button id="sync-now" class="ghost-button small-button sync-button" type="button" title="Sync sessions across devices">
+                <span class="sync-icon" aria-hidden="true">⇅</span>
+                <span>Sync</span>
+              </button>
+              <button id="import-toggle" class="ghost-button small-button" type="button" aria-expanded="false" aria-controls="import-panel">
+                ↓ Import
+              </button>
+            </div>
           </div>
+
+          <div id="sync-status-bar" class="sync-status-bar" hidden></div>
+
+          <section id="import-panel" class="import-panel" hidden>
+            <p class="eyebrow">Import from Browser</p>
+            <p class="import-description">Each bookmark folder becomes a session in your library.</p>
+
+            <div class="import-scope">
+              <label class="import-radio">
+                <input type="radio" name="import-scope" value="all" checked />
+                <span>All bookmark folders</span>
+              </label>
+              <label class="import-radio">
+                <input type="radio" name="import-scope" value="folder" />
+                <span>Specific folder</span>
+              </label>
+            </div>
+
+            <div id="import-folder-row" class="import-folder-row" hidden>
+              <select id="import-folder-select" class="import-folder-select">
+                <option value="">Loading folders…</option>
+              </select>
+            </div>
+
+            <label class="import-ai-toggle">
+              <input type="checkbox" id="import-use-ai" checked />
+              <span>
+                <strong>Enhance with AI</strong>
+                <small>Auto-categorize &amp; tag each tab with Gemini</small>
+              </span>
+            </label>
+
+            <button id="import-run" class="primary-button import-run-btn" type="button">
+              Import Bookmarks
+            </button>
+
+            <div id="import-progress" class="import-progress" hidden>
+              <div class="import-progress-row">
+                <span class="import-progress-label">Saving sessions</span>
+                <span id="import-progress-sessions" class="import-progress-status">…</span>
+              </div>
+              <div class="import-progress-row" id="import-ai-row" hidden>
+                <span class="import-progress-label">
+                  AI enriching <span id="import-ai-current" class="import-ai-target"></span>
+                </span>
+                <span id="import-progress-ai" class="import-progress-status">…</span>
+              </div>
+              <div class="import-progress-track">
+                <div id="import-progress-fill" class="import-progress-fill"></div>
+              </div>
+              <p class="import-progress-note">Sessions are usable now — AI keeps improving them in the background</p>
+            </div>
+          </section>
           <label class="field archive-search">
             <span>Library Filter</span>
             <input
@@ -354,7 +416,10 @@
               <p class="history-meta"></p>
             </div>
           </div>
-          <span class="category-pill history-count"></span>
+          <div class="history-top-right">
+            <span class="ai-enrichment-badge" hidden></span>
+            <span class="category-pill history-count"></span>
+          </div>
         </div>
         <div class="history-actions">
           <button class="ghost-button small-button history-open-session" type="button">

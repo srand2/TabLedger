@@ -3,6 +3,7 @@ const extensionApi = globalThis.browser ?? chrome;
 const DRAFT_KEY = "tabGardenDraft";
 const BOOKMARK_METADATA_KEY = "bookmarkMetadata";
 const SAVED_SESSIONS_KEY = "savedSessions";
+const AI_ENRICHMENT_QUEUE_KEY = "aiEnrichmentQueue";
 const LIBRARY_WIDTH_KEY = "libraryExplorerWidth";
 const SETTINGS_KEY = "tabLedgerSettings";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
@@ -57,7 +58,10 @@ const state = {
   expandedTabIds: new Set(),
   geminiApiKeyVisible: false,
   phase: "capture",             // "capture" | "review" | "save"
-  activeView: "draft"           // "draft" | "library"
+  activeView: "draft",          // "draft" | "library"
+  importOpen: false,
+  importRunning: false,
+  syncRunning: false
 };
 
 const elements = {
@@ -99,7 +103,21 @@ const elements = {
   categoryTemplate: document.getElementById("category-template"),
   tabTemplate: document.getElementById("tab-template"),
   historyTemplate: document.getElementById("history-template"),
-  phaseStrip: document.getElementById("phase-strip")
+  phaseStrip: document.getElementById("phase-strip"),
+  importToggleButton: document.getElementById("import-toggle"),
+  importPanel: document.getElementById("import-panel"),
+  importFolderRow: document.getElementById("import-folder-row"),
+  importFolderSelect: document.getElementById("import-folder-select"),
+  importUseAiCheckbox: document.getElementById("import-use-ai"),
+  importRunButton: document.getElementById("import-run"),
+  importProgress: document.getElementById("import-progress"),
+  importProgressSessions: document.getElementById("import-progress-sessions"),
+  importAiRow: document.getElementById("import-ai-row"),
+  importAiCurrent: document.getElementById("import-ai-current"),
+  importProgressAi: document.getElementById("import-progress-ai"),
+  importProgressFill: document.getElementById("import-progress-fill"),
+  syncNowButton: document.getElementById("sync-now"),
+  syncStatusBar: document.getElementById("sync-status-bar")
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -111,6 +129,13 @@ async function init() {
   await restoreSettings();
   await loadRecentArchives();
   render();
+
+  // Re-render library when background AI enrichment updates sessions
+  extensionApi.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[SAVED_SESSIONS_KEY]) {
+      loadRecentArchives().then(() => renderArchiveExplorer());
+    }
+  });
 
   if (!capabilities.nativeBookmarks) {
     setStatus(
@@ -222,6 +247,20 @@ function bindEvents() {
   window.addEventListener("resize", handleWindowResize);
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("keydown", handleDocumentKeydown);
+
+  elements.importToggleButton.addEventListener("click", handleImportToggle);
+  elements.importRunButton.addEventListener("click", handleImportRun);
+  elements.syncNowButton.addEventListener("click", handleSyncNow);
+
+  document.querySelectorAll("input[name='import-scope']").forEach((radio) => {
+    radio.addEventListener("change", (event) => {
+      const isFolder = event.target.value === "folder";
+      elements.importFolderRow.hidden = !isFolder;
+      if (isFolder && elements.importFolderSelect.options.length <= 1) {
+        loadBookmarkFolders();
+      }
+    });
+  });
 }
 
 async function restoreDraft() {
@@ -876,7 +915,19 @@ function renderArchiveSession(session) {
   const openSessionButton = node.querySelector(".history-open-session");
   const deleteSessionButton = node.querySelector(".history-delete-session");
   const itemList = node.querySelector(".history-item-list");
+  const aiBadge = node.querySelector(".ai-enrichment-badge");
   const categoryCount = new Set(session.items.map((item) => item.category)).size;
+
+  if (session.aiEnrichmentStatus === "pending") {
+    aiBadge.hidden = false;
+    aiBadge.dataset.status = "pending";
+    aiBadge.textContent = "✦ AI enriching…";
+  } else if (session.aiEnrichmentStatus === "failed") {
+    aiBadge.hidden = false;
+    aiBadge.dataset.status = "failed";
+    aiBadge.textContent = "⚠ Retry AI";
+    aiBadge.addEventListener("click", () => handleRetryAiEnrichment(session.id));
+  }
   const isCollapsed = state.collapsedArchiveSessions.includes(session.id);
 
   sessionToggle.setAttribute("aria-expanded", String(!isCollapsed));
@@ -3068,6 +3119,137 @@ function formatDateTime(value) {
     });
   } catch (_error) {
     return value;
+  }
+}
+
+// ── Import ──────────────────────────────────────────────────
+
+function handleImportToggle() {
+  state.importOpen = !state.importOpen;
+  elements.importPanel.hidden = !state.importOpen;
+  elements.importToggleButton.setAttribute("aria-expanded", String(state.importOpen));
+  elements.importToggleButton.textContent = state.importOpen ? "✕ Close" : "↓ Import";
+}
+
+async function loadBookmarkFolders() {
+  const response = await extensionApi.runtime.sendMessage({ type: "get-bookmark-folders" });
+  if (!response?.ok) return;
+
+  const select = elements.importFolderSelect;
+  select.innerHTML = '<option value="">Select a folder…</option>';
+  for (const folder of response.folders) {
+    const option = document.createElement("option");
+    option.value = folder.id;
+    option.textContent = "\u00a0".repeat(folder.depth * 2) + folder.title +
+      (folder.childCount ? ` (${folder.childCount})` : "");
+    select.appendChild(option);
+  }
+}
+
+async function handleImportRun() {
+  if (state.importRunning) return;
+  state.importRunning = true;
+  elements.importRunButton.disabled = true;
+
+  const scope = document.querySelector("input[name='import-scope']:checked")?.value ?? "all";
+  const folderId = scope === "folder" ? elements.importFolderSelect.value || null : null;
+  const useAi = elements.importUseAiCheckbox.checked;
+
+  elements.importProgress.hidden = false;
+  setImportProgressSessions("…", false);
+  elements.importProgressFill.style.width = "10%";
+
+  try {
+    const response = await extensionApi.runtime.sendMessage({
+      type: "import-bookmarks",
+      payload: { folderId, useAi }
+    });
+
+    if (!response?.ok) {
+      throw new Error(response?.error || "Import failed");
+    }
+
+    const { importedCount, totalBookmarks } = response.result;
+    setImportProgressSessions(`${importedCount} sessions, ${totalBookmarks} tabs`, true);
+    elements.importProgressFill.style.width = useAi ? "40%" : "100%";
+
+    if (useAi && importedCount > 0) {
+      elements.importAiRow.hidden = false;
+      elements.importAiCurrent.textContent = "sessions";
+      elements.importProgressAi.textContent = `0 / ${importedCount}`;
+      // Progress updates come via storage.onChanged → loadRecentArchives
+    }
+
+    await loadRecentArchives();
+    renderArchiveExplorer();
+  } catch (err) {
+    setStatus(`Import failed: ${err.message}`, "error");
+    elements.importProgress.hidden = true;
+  } finally {
+    state.importRunning = false;
+    elements.importRunButton.disabled = false;
+  }
+}
+
+function setImportProgressSessions(text, done) {
+  elements.importProgressSessions.textContent = text;
+  elements.importProgressSessions.dataset.done = String(done);
+}
+
+// ── Sync ───────────────────────────────────────────────────
+
+async function handleSyncNow() {
+  if (state.syncRunning) return;
+  state.syncRunning = true;
+  elements.syncNowButton.classList.add("is-syncing");
+  elements.syncNowButton.disabled = true;
+  setSyncStatus("Syncing…", "info");
+
+  try {
+    const response = await extensionApi.runtime.sendMessage({ type: "sync-now" });
+    if (!response?.ok) throw new Error(response?.error || "Sync failed");
+
+    const { pushed, pulled } = response.result;
+    const parts = [];
+    if (pushed > 0) parts.push(`${pushed} pushed`);
+    if (pulled > 0) parts.push(`${pulled} pulled`);
+    setSyncStatus(parts.length ? `Synced — ${parts.join(", ")}` : "Already up to date", "success");
+
+    if (pulled > 0) {
+      await loadRecentArchives();
+      renderArchiveExplorer();
+    }
+  } catch (err) {
+    setSyncStatus(`Sync failed: ${err.message}`, "error");
+  } finally {
+    state.syncRunning = false;
+    elements.syncNowButton.classList.remove("is-syncing");
+    elements.syncNowButton.disabled = false;
+  }
+}
+
+function setSyncStatus(message, tone) {
+  elements.syncStatusBar.textContent = message;
+  elements.syncStatusBar.dataset.tone = tone;
+  elements.syncStatusBar.hidden = false;
+  clearTimeout(elements.syncStatusBar._clearTimer);
+  if (tone === "success") {
+    elements.syncStatusBar._clearTimer = setTimeout(() => {
+      elements.syncStatusBar.hidden = true;
+    }, 4000);
+  }
+}
+
+// ── AI enrichment retry ────────────────────────────────────
+
+async function handleRetryAiEnrichment(sessionId) {
+  const response = await extensionApi.runtime.sendMessage({
+    type: "retry-ai-enrichment",
+    payload: { sessionId }
+  });
+  if (response?.ok) {
+    await loadRecentArchives();
+    renderArchiveExplorer();
   }
 }
 

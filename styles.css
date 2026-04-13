@@ -1353,3 +1353,253 @@ body.is-resizing-layout * {
   background: rgba(20, 184, 166, 0.06);
   opacity: 0.7;
 }
+
+/* ── Library header actions ──────────────────────────────── */
+.library-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sync-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sync-icon {
+  font-size: 1rem;
+  line-height: 1;
+  display: inline-block;
+  transition: transform 600ms ease;
+}
+
+.sync-button.is-syncing .sync-icon {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Sync status bar ─────────────────────────────────────── */
+.sync-status-bar {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.72);
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sync-status-bar[data-tone="success"] { color: #99f6e4; border-color: rgba(20, 184, 166, 0.3); }
+.sync-status-bar[data-tone="error"]   { color: #fda4af; border-color: rgba(239, 68, 68, 0.3); }
+.sync-status-bar[data-tone="info"]    { color: #bfdbfe; border-color: rgba(59, 130, 246, 0.3); }
+
+/* ── Import panel ────────────────────────────────────────── */
+.import-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.import-panel .eyebrow {
+  margin-bottom: 2px;
+}
+
+.import-description {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.import-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.import-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.import-radio input[type="radio"] {
+  width: auto;
+  accent-color: var(--action);
+}
+
+.import-folder-row {
+  margin-bottom: 10px;
+}
+
+.import-folder-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--input);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.84rem;
+  cursor: pointer;
+  transition: border-color 140ms ease;
+}
+
+.import-folder-select:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.78);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.import-ai-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 12px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(45, 55, 72, 0.6);
+  border-bottom: 1px solid rgba(45, 55, 72, 0.6);
+}
+
+.import-ai-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--action);
+}
+
+.import-ai-toggle span {
+  display: grid;
+  gap: 2px;
+}
+
+.import-ai-toggle strong {
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.import-ai-toggle small {
+  color: var(--muted);
+  font-size: 0.77rem;
+  line-height: 1.45;
+}
+
+.import-run-btn {
+  width: 100%;
+}
+
+/* ── Import progress ─────────────────────────────────────── */
+.import-progress {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.import-progress-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.import-progress-label {
+  color: var(--muted);
+}
+
+.import-ai-target {
+  color: var(--action);
+  font-weight: 600;
+}
+
+.import-progress-status {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.import-progress-status[data-done="true"] {
+  color: var(--success);
+}
+
+.import-progress-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.import-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--action), var(--tags));
+  transition: width 400ms ease;
+}
+
+.import-progress-note {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* ── AI enrichment badge on session cards ────────────────── */
+.history-top-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ai-enrichment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.ai-enrichment-badge[data-status="pending"] {
+  background: rgba(99, 102, 241, 0.14);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
+  animation: badge-pulse 1.8s ease-in-out infinite;
+}
+
+.ai-enrichment-badge[data-status="failed"] {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fda4af;
+  cursor: pointer;
+}
+
+.ai-enrichment-badge[data-status="failed"]:hover {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
