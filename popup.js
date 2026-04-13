@@ -1,17 +1,21 @@
 const extensionApi = globalThis.browser ?? chrome;
 
 document.getElementById("capture-all").addEventListener("click", () => {
-  openDashboard("all");
+  openDashboard({
+    capture: "all"
+  });
 });
 
 document.getElementById("open-dashboard").addEventListener("click", () => {
-  openDashboard();
+  openDashboard({
+    view: "library"
+  });
 });
 
-async function openDashboard(scope) {
+async function openDashboard(intent) {
   const response = await extensionApi.runtime.sendMessage({
     type: "open-dashboard",
-    scope: scope || null
+    payload: intent || null
   });
 
   if (response?.ok) {
