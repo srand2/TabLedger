@@ -100,6 +100,8 @@ const elements = {
   viewTabDraftButton: document.getElementById("view-tab-draft"),
   viewTabLibraryButton: document.getElementById("view-tab-library"),
   archiveFilterInput: document.getElementById("archive-filter"),
+  archiveCategorySelect: document.getElementById("archive-category-select"),
+  archiveTagSelect: document.getElementById("archive-tag-select"),
   archiveActiveFilters: document.getElementById("archive-active-filters"),
   archiveSummary: document.getElementById("archive-summary"),
   tabCount: document.getElementById("tab-count"),
@@ -213,6 +215,22 @@ function bindEvents() {
   elements.archiveFilterInput.addEventListener("input", (event) => {
     state.archiveFilterQuery = event.target.value;
     renderArchiveExplorer();
+  });
+
+  elements.archiveCategorySelect.addEventListener("change", (event) => {
+    const value = event.target.value;
+    if (value) {
+      addArchiveValueFilter("categories", value);
+      renderArchiveExplorer();
+    }
+  });
+
+  elements.archiveTagSelect.addEventListener("change", (event) => {
+    const value = event.target.value;
+    if (value) {
+      addArchiveValueFilter("tags", value);
+      renderArchiveExplorer();
+    }
   });
 
   elements.dedupeWithinSessionInput.addEventListener("change", (event) => {
@@ -832,6 +850,7 @@ function renderArchiveExplorer() {
   const archiveView = getArchiveView();
   elements.recentArchives.innerHTML = "";
 
+  renderArchiveFilterSelects();
   renderArchiveActiveFilters();
   renderArchiveSummary(archiveView);
 
@@ -858,6 +877,40 @@ function renderArchiveExplorer() {
   for (const archive of archiveView.sessions) {
     elements.recentArchives.appendChild(renderArchiveSession(archive));
   }
+}
+
+function renderArchiveFilterSelects() {
+  const categories = new Set();
+  const tags = new Set();
+
+  for (const session of state.recentArchives) {
+    for (const item of session.items) {
+      if (item.category) categories.add(item.category);
+      for (const tag of (item.tags || [])) tags.add(tag);
+    }
+  }
+
+  const activeCategories = new Set(state.archiveFilters.categories.map((v) => v.toLowerCase()));
+  const activeTags = new Set(state.archiveFilters.tags.map((v) => v.toLowerCase()));
+
+  const rebuildSelect = (selectEl, values, activeSet) => {
+    const placeholder = selectEl.dataset.placeholder || "";
+    selectEl.innerHTML = `<option value="">${placeholder}</option>`;
+    for (const val of [...values].sort((a, b) => a.localeCompare(b))) {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = val;
+      if (activeSet.has(val.toLowerCase())) opt.disabled = true;
+      selectEl.appendChild(opt);
+    }
+    selectEl.value = "";
+  };
+
+  rebuildSelect(elements.archiveCategorySelect, categories, activeCategories);
+  rebuildSelect(elements.archiveTagSelect, tags, activeTags);
+
+  const hasArchives = state.recentArchives.length > 0;
+  elements.archiveCategorySelect.closest(".archive-filter-selects").hidden = !hasArchives;
 }
 
 function renderArchiveActiveFilters() {

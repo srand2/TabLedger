@@ -532,6 +532,31 @@ button:disabled {
   transform: translate(-50%, -50%);
 }
 
+.archive-filter-selects {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  margin-bottom: 4px;
+}
+
+.archive-filter-selects select {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  background: var(--surface-1, #13131a);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.archive-filter-selects select:focus {
+  outline: 2px solid rgba(99, 102, 241, 0.5);
+  outline-offset: 1px;
+}
+
 .archive-active-filters {
   display: flex;
   flex-wrap: wrap;
