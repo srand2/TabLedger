@@ -1,1 +1,14 @@
 .worktrees/
+
+# Local tooling and planning artifacts
+.claude/
+.superpowers/
+CLAUDE.md
+IMPLEMENTATION_PLAN.md
+
+# Non-core support assets
+docs/
+media/
+
+# OS noise
+.DS_Store
