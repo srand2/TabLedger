@@ -928,6 +928,9 @@ async function getDeviceId() {
 // ── Bookmark folder listing ───────────────────────────────────────────────────
 
 async function getBookmarkFolders() {
+  if (!extensionApi.bookmarks?.getTree) {
+    throw new Error("Chrome Bookmarks API is not available.");
+  }
   const tree = await extensionApi.bookmarks.getTree();
   const folders = [];
   const SKIP_TITLES = new Set(["Bookmarks Bar", "Other Bookmarks", "Mobile Bookmarks"]);
@@ -954,6 +957,9 @@ async function getBookmarkFolders() {
 // ── Bookmark import ───────────────────────────────────────────────────────────
 
 async function importBookmarksAsSession({ folderId = null, useAi = false } = {}) {
+  if (!extensionApi.bookmarks?.getTree) {
+    throw new Error("Chrome Bookmarks API is not available.");
+  }
   const tree = await extensionApi.bookmarks.getTree();
   const root = folderId
     ? (await extensionApi.bookmarks.getSubTree(folderId))[0]
