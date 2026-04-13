@@ -135,6 +135,36 @@ assertEqual(
   "example.com/page"
 );
 assertEqual(
+  "strips utm_term",
+  normalizeArchiveUrl("https://example.com/page?utm_term=shoes"),
+  "example.com/page"
+);
+assertEqual(
+  "strips utm_content",
+  normalizeArchiveUrl("https://example.com/page?utm_content=banner"),
+  "example.com/page"
+);
+assertEqual(
+  "strips _gid",
+  normalizeArchiveUrl("https://example.com/page?_gid=GA1.2.3"),
+  "example.com/page"
+);
+assertEqual(
+  "strips ref",
+  normalizeArchiveUrl("https://example.com/page?ref=homepage"),
+  "example.com/page"
+);
+assertEqual(
+  "strips mc_cid",
+  normalizeArchiveUrl("https://example.com/page?mc_cid=abc"),
+  "example.com/page"
+);
+assertEqual(
+  "strips mc_eid",
+  normalizeArchiveUrl("https://example.com/page?mc_eid=xyz"),
+  "example.com/page"
+);
+assertEqual(
   "preserves non-tracking query params",
   normalizeArchiveUrl("https://example.com/search?q=hello"),
   "example.com/search?q=hello"
@@ -158,6 +188,73 @@ assertEqual(
   "falls back gracefully for non-URL strings",
   normalizeArchiveUrl("not-a-url"),
   "not-a-url"
+);
+
+// ---- getUniqueUrls (keep in sync with background.js) ----
+
+function getUniqueUrls(urls) {
+  if (!Array.isArray(urls)) {
+    return [];
+  }
+
+  const seen = new Set();
+  const uniqueUrls = [];
+
+  for (const url of urls) {
+    const raw = String(url || "").trim();
+    if (!raw) continue;
+    const key = normalizeArchiveUrl(raw);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueUrls.push(raw); // push original, not normalized key
+  }
+
+  return uniqueUrls;
+}
+
+// ---- getUniqueUrls tests ----
+
+console.log("\ngetUniqueUrls:");
+
+assertEqual(
+  "non-array input → empty array",
+  JSON.stringify(getUniqueUrls(null)),
+  JSON.stringify([])
+);
+assertEqual(
+  "empty array → empty array",
+  JSON.stringify(getUniqueUrls([])),
+  JSON.stringify([])
+);
+assertEqual(
+  "unique URLs pass through unchanged",
+  JSON.stringify(getUniqueUrls(["https://example.com/a", "https://example.com/b"])),
+  JSON.stringify(["https://example.com/a", "https://example.com/b"])
+);
+assertEqual(
+  "exact duplicate URL is removed",
+  JSON.stringify(getUniqueUrls(["https://example.com/page", "https://example.com/page"])),
+  JSON.stringify(["https://example.com/page"])
+);
+assertEqual(
+  "http and https treated as same URL — keeps original URL not normalized",
+  JSON.stringify(getUniqueUrls(["https://example.com/page", "http://example.com/page"])),
+  JSON.stringify(["https://example.com/page"])
+);
+assertEqual(
+  "www and non-www treated as same URL — keeps original URL",
+  JSON.stringify(getUniqueUrls(["https://www.example.com/page", "https://example.com/page"])),
+  JSON.stringify(["https://www.example.com/page"])
+);
+assertEqual(
+  "tracking param URL treated as same as clean URL — keeps original URL",
+  JSON.stringify(getUniqueUrls(["https://example.com/page?utm_source=ads", "https://example.com/page"])),
+  JSON.stringify(["https://example.com/page?utm_source=ads"])
+);
+assertEqual(
+  "output URLs are originals (not normalized keys)",
+  getUniqueUrls(["https://example.com/page"])[0],
+  "https://example.com/page"
 );
 
 // ---- Summary ----
