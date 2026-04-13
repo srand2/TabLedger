@@ -13,6 +13,15 @@ const DEFAULT_SETTINGS = {
   dedupeAcrossSessions: false
 };
 
+// Resume any AI enrichment that was interrupted by browser restart
+extensionApi.runtime.onStartup.addListener(() => {
+  drainAiEnrichmentQueue();
+});
+
+extensionApi.runtime.onInstalled.addListener(() => {
+  drainAiEnrichmentQueue();
+});
+
 extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "open-dashboard") {
     openDashboard(message.scope)
