@@ -1,18 +1,22 @@
 const extensionApi = globalThis.browser ?? chrome;
 
+// SVG icon strings — used wherever JS builds button innerHTML dynamically.
+// All icons use fill="currentColor" or stroke="currentColor" so they inherit CSS color.
+const ICONS = {
+  sparkle: '<svg viewBox="0 0 16 16" fill="currentColor" class="icon tab-ai-icon" aria-hidden="true"><path d="M8 0L9.5 6.5L16 8L9.5 9.5L8 16L6.5 9.5L0 8L6.5 6.5Z"/></svg>',
+  warning: '<svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M8.982 1.566a1.13 1.13 0 00-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 01-1.1 0L7.1 5.995A.905.905 0 018 5zm.002 6a1 1 0 110 2 1 1 0 010-2z"/></svg>',
+  pause: '<svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M5.5 3.5A1.5 1.5 0 017 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5zm5 0A1.5 1.5 0 0112 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5z"/></svg>',
+  resume: '<svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 010 1.393z"/></svg>',
+  close: '<svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z"/></svg>',
+  download: '<svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path fill-rule="evenodd" d="M8 1a.5.5 0 01.5.5v11.793l3.146-3.147a.5.5 0 01.708.708l-4 4a.5.5 0 01-.708 0l-4-4a.5.5 0 01.708-.708L7.5 13.293V1.5A.5.5 0 018 1z"/></svg>',
+};
+
 const DRAFT_KEY = "tabGardenDraft";
 const BOOKMARK_METADATA_KEY = "bookmarkMetadata";
 const SAVED_SESSIONS_KEY = "savedSessions";
 const AI_ENRICHMENT_QUEUE_KEY = "aiEnrichmentQueue";
-const LIBRARY_WIDTH_KEY = "libraryExplorerWidth";
 const SETTINGS_KEY = "tabLedgerSettings";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
-const DEFAULT_LIBRARY_WIDTH = 420;
-const MIN_LIBRARY_WIDTH = 340;
-const MAX_LIBRARY_WIDTH = 720;
-const MIN_DRAFT_WIDTH = 420;
-const STACKED_LAYOUT_BREAKPOINT = 1120;
-const RESIZER_STEP = 24;
 const CATEGORY_MATCH_SHORTLIST_LIMIT = 8;
 const MAX_EXISTING_CATEGORY_CONTEXT = 60;
 const FIELD_SOURCES = {
@@ -51,9 +55,9 @@ const state = {
   bulkAiPaused: false,
   bulkAiCancelled: false,
   bulkAiResumeResolve: null,
+  libraryBulkAiRunning: false,
   editingArchiveItemKey: null,
   archiveItemEditor: null,
-  libraryWidth: DEFAULT_LIBRARY_WIDTH,
   settings: { ...DEFAULT_SETTINGS },
   settingsOpen: false,
   aiRequestTokens: {},
@@ -68,7 +72,13 @@ const state = {
   importEnrichmentDone: 0,
   syncRunning: false,
   libraryInitialized: false,
-  selectedSessionIds: new Set()
+  selectedSessionIds: new Set(),
+  selectedArchiveItemKeys: new Set(),
+  aiSelectionModal: {
+    open: false,
+    mode: null,
+    sessions: []
+  }
 };
 
 const elements = {
@@ -92,14 +102,16 @@ const elements = {
   ),
   proceedToSaveButton: document.getElementById("proceed-to-save"),
   backToReviewButton: document.getElementById("back-to-review"),
+  phaseCopy: document.getElementById("phase-copy"),
   sessionNameInput: document.getElementById("session-name"),
   filterQueryInput: document.getElementById("filter-query"),
   layoutPanel: document.getElementById("layout-panel"),
   draftPane: document.getElementById("draft-pane"),
   libraryPane: document.getElementById("library-pane"),
-  layoutResizer: document.getElementById("layout-resizer"),
+  viewTabBar: document.getElementById("view-tab-bar"),
   viewTabDraftButton: document.getElementById("view-tab-draft"),
   viewTabLibraryButton: document.getElementById("view-tab-library"),
+  libraryBulkFillAiButton: document.getElementById("library-bulk-fill-ai"),
   archiveFilterInput: document.getElementById("archive-filter"),
   archiveCategorySelect: document.getElementById("archive-category-select"),
   archiveTagSelect: document.getElementById("archive-tag-select"),
@@ -121,6 +133,13 @@ const elements = {
   tabTemplate: document.getElementById("tab-template"),
   historyTemplate: document.getElementById("history-template"),
   phaseStrip: document.getElementById("phase-strip"),
+  aiSelectionModal: document.getElementById("ai-selection-modal"),
+  aiSelectionTitle: document.getElementById("ai-selection-title"),
+  aiSelectionSummary: document.getElementById("ai-selection-summary"),
+  aiSelectionSessionList: document.getElementById("ai-selection-session-list"),
+  aiSelectionCloseButton: document.getElementById("ai-selection-close"),
+  aiSelectionCancelButton: document.getElementById("ai-selection-cancel"),
+  aiSelectionConfirmButton: document.getElementById("ai-selection-confirm"),
   importToggleButton: document.getElementById("import-toggle"),
   importPanel: document.getElementById("import-panel"),
   importFolderRow: document.getElementById("import-folder-row"),
@@ -142,9 +161,10 @@ document.addEventListener("DOMContentLoaded", init);
 async function init() {
   bindEvents();
   await restoreDraft();
-  await restoreLibraryWidth();
   await restoreSettings();
   await loadRecentArchives();
+  const launchIntent = getDashboardLaunchIntent();
+  applyDashboardLaunchIntent(launchIntent);
   render();
 
   // Re-render library when background AI enrichment updates sessions
@@ -179,9 +199,11 @@ async function init() {
     );
   }
 
-  const captureScope = new URLSearchParams(window.location.search).get("capture");
-  if (captureScope === "all") {
+  if (launchIntent.captureAll) {
     await scanTabs();
+  }
+
+  if (launchIntent.hasParams) {
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 }
@@ -192,7 +214,7 @@ function bindEvents() {
   elements.exportJsonButton.addEventListener("click", handleExportJson);
   elements.resetDraftButton.addEventListener("click", handleResetDraft);
   elements.toggleDraftCollapseButton.addEventListener("click", handleToggleDraftCollapse);
-  elements.bulkFillAiButton.addEventListener("click", handleBulkFillWithAi);
+  elements.bulkFillAiButton.addEventListener("click", openDraftAiSelectionModal);
   elements.bulkAiPauseButton.addEventListener("click", handlePauseAi);
   elements.bulkAiStopButton.addEventListener("click", handleStopAi);
   elements.settingsToggleButton.addEventListener("click", handleToggleSettings);
@@ -258,6 +280,7 @@ function bindEvents() {
 
   elements.bulkDeleteCancelButton.addEventListener("click", () => {
     state.selectedSessionIds.clear();
+    state.selectedArchiveItemKeys.clear();
     renderArchiveExplorer();
   });
 
@@ -303,9 +326,6 @@ function bindEvents() {
     handleToggleGeminiApiKeyVisibility();
   });
 
-  elements.layoutResizer.addEventListener("pointerdown", handleResizerPointerDown);
-  elements.layoutResizer.addEventListener("keydown", handleResizerKeyDown);
-
   elements.viewTabDraftButton.addEventListener("click", () => {
     state.activeView = "draft";
     render();
@@ -318,7 +338,16 @@ function bindEvents() {
     elements.libraryPane.querySelector("h2").focus();
   });
 
-  window.addEventListener("resize", handleWindowResize);
+  elements.libraryBulkFillAiButton.addEventListener("click", openLibraryAiSelectionModal);
+  elements.aiSelectionCloseButton.addEventListener("click", closeAiSelectionModal);
+  elements.aiSelectionCancelButton.addEventListener("click", closeAiSelectionModal);
+  elements.aiSelectionConfirmButton.addEventListener("click", handleConfirmAiSelectionModal);
+  elements.aiSelectionModal.addEventListener("click", (event) => {
+    if (event.target === elements.aiSelectionModal) {
+      closeAiSelectionModal();
+    }
+  });
+
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("keydown", handleDocumentKeydown);
 
@@ -335,6 +364,33 @@ function bindEvents() {
       }
     });
   });
+}
+
+function getDashboardLaunchIntent() {
+  const params = new URLSearchParams(window.location.search);
+  const capture = params.get("capture");
+  const view = params.get("view");
+
+  return {
+    captureAll: capture === "all",
+    view: view === "library" ? "library" : null,
+    hasParams: params.has("capture") || params.has("view")
+  };
+}
+
+function applyDashboardLaunchIntent(intent) {
+  if (!state.items.length && intent.view !== "library") {
+    state.phase = "capture";
+    state.activeView = "draft";
+  }
+
+  if (intent.view === "library") {
+    state.activeView = "library";
+  }
+
+  if (intent.captureAll) {
+    state.activeView = "draft";
+  }
 }
 
 async function restoreDraft() {
@@ -393,11 +449,17 @@ async function loadRecentArchives() {
       state.selectedSessionIds.delete(id);
     }
   }
-}
 
-async function restoreLibraryWidth() {
-  const stored = await extensionApi.storage.local.get(LIBRARY_WIDTH_KEY);
-  state.libraryWidth = normalizeLibraryWidth(stored[LIBRARY_WIDTH_KEY]);
+  const validArchiveItemKeys = new Set(
+    state.recentArchives.flatMap((session) =>
+      session.items.map((item) => getArchiveItemEditorKey(session.id, item))
+    )
+  );
+  for (const itemKey of state.selectedArchiveItemKeys) {
+    if (!validArchiveItemKeys.has(itemKey)) {
+      state.selectedArchiveItemKeys.delete(itemKey);
+    }
+  }
 }
 
 async function restoreSettings() {
@@ -426,6 +488,7 @@ async function scanTabs() {
     }
 
     await persistDraft();
+    state.activeView = "draft";
     state.phase = "review";
     render();
 
@@ -436,16 +499,13 @@ async function scanTabs() {
       : "";
     const hasApiKey = String(state.settings.geminiApiKey || "").trim().length > 0;
 
-    if (hasApiKey) {
-      setStatus(`${captureCount} tabs captured. Starting AI fill...`);
-      // Schedule after the scan's finally block runs setBusy(false)
-      setTimeout(() => { void handleBulkFillWithAi(); }, 0);
-    } else {
-      setStatus(
-        `${captureCount} tabs grouped into ${groupCount} categories.${skippedSuffix}`,
-        "success"
-      );
-    }
+    const aiSuggestion = hasApiKey
+      ? " Use AI to enrich metadata when you're ready."
+      : "";
+    setStatus(
+      `${captureCount} tabs grouped into ${groupCount} categories.${skippedSuffix}${aiSuggestion}`,
+      "success"
+    );
   } catch (error) {
     console.error("Failed to scan tabs", error);
     setStatus("Could not scan open tabs. Please try again.", "error");
@@ -585,34 +645,43 @@ async function handleExportJson() {
 async function handleResetDraft() {
   await clearDraftState();
   state.phase = "capture";
+  state.activeView = "draft";
   render();
   setStatus("Cleared the current draft.", "success");
 }
 
 function render() {
+  const isSavePhase = state.phase === "save";
+  const archiveView = getArchiveView();
   elements.dashboardShell.dataset.phase = state.phase;
   elements.dashboardShell.dataset.activeView = state.activeView;
   elements.sessionNameInput.value = state.sessionName;
   elements.filterQueryInput.value = state.filterQuery;
   elements.archiveFilterInput.value = state.archiveFilterQuery;
+  elements.phaseCopy.textContent = getPhaseCopy();
   elements.tabCount.textContent = String(state.items.length);
   elements.categoryCount.textContent = String(getVisibleGroups().length);
   elements.skippedCount.textContent = String(state.skippedCount);
   elements.saveBookmarksButton.disabled = !capabilities.nativeBookmarks || !state.items.length;
   elements.exportJsonButton.disabled = !state.items.length;
+  elements.proceedToSaveButton.disabled = !state.items.length;
+  elements.backToReviewButton.disabled = !state.items.length;
   elements.resetDraftButton.disabled = !state.items.length && !state.sessionName;
   elements.toggleDraftCollapseButton.disabled = !state.items.length;
   elements.toggleDraftCollapseButton.textContent = areAllDraftGroupsCollapsed()
     ? "Expand All"
     : "Collapse All";
-  elements.bulkFillAiButton.disabled = !state.items.length || state.bulkAiRunning;
+  elements.bulkFillAiButton.disabled = !state.items.length || state.bulkAiRunning || isSavePhase;
   elements.bulkFillAiButton.innerHTML = state.bulkAiRunning
-    ? '<span class="tab-ai-icon" aria-hidden="true">✦</span><span>Using AI...</span>'
-    : '<span class="tab-ai-icon" aria-hidden="true">✦</span><span>Use AI</span>';
+    ? `${ICONS.sparkle}<span>Using AI...</span>`
+    : `${ICONS.sparkle}<span>Use AI</span>`;
   elements.bulkAiPauseButton.hidden = !state.bulkAiRunning;
   elements.bulkAiStopButton.hidden = !state.bulkAiRunning;
+  updateLibraryBulkAiButton(archiveView);
   if (state.bulkAiRunning) {
-    elements.bulkAiPauseButton.textContent = state.bulkAiPaused ? "▶ Resume" : "⏸ Pause";
+    elements.bulkAiPauseButton.innerHTML = state.bulkAiPaused
+      ? `${ICONS.resume} Resume`
+      : `${ICONS.pause} Pause`;
   }
   elements.settingsToggleButton.setAttribute("aria-expanded", String(state.settingsOpen));
   elements.settingsPanel.hidden = !state.settingsOpen;
@@ -635,20 +704,344 @@ function render() {
 
   // View tab state
   const isDraftView = state.activeView === "draft";
+  elements.viewTabBar.hidden = false;
   elements.viewTabDraftButton.classList.toggle("is-active", isDraftView);
   elements.viewTabDraftButton.setAttribute("aria-selected", String(isDraftView));
   elements.viewTabLibraryButton.classList.toggle("is-active", !isDraftView);
   elements.viewTabLibraryButton.setAttribute("aria-selected", String(!isDraftView));
   elements.layoutPanel.classList.toggle("view-draft", isDraftView);
   elements.layoutPanel.classList.toggle("view-library", !isDraftView);
-
-  applyLayoutSizing();
   updatePhaseStrip();
   renderCategories();
-  renderArchiveExplorer();
+  renderArchiveExplorer(archiveView);
+  renderAiSelectionModal();
+}
+
+function getPhaseCopy() {
+  if (state.phase === "review") {
+    return "Review the draft, adjust categories and notes, then continue when the session feels right.";
+  }
+
+  if (state.phase === "save") {
+    return "Final step: confirm the session name, then save or export this polished tab set.";
+  }
+
+  return "Start with a fresh capture of your current windows, then shape that draft into a reusable session.";
+}
+
+function openDraftAiSelectionModal() {
+  if (!state.items.length || state.bulkAiRunning || state.phase === "save") {
+    return;
+  }
+
+  state.aiSelectionModal = {
+    open: true,
+    mode: "draft",
+    sessions: [
+      {
+        id: "draft",
+        title: state.sessionName.trim() || "Current Draft",
+        sourceLabel: "Current draft",
+        items: state.items.map((item) => ({
+          key: item.id,
+          title: item.title,
+          url: item.url,
+          category: item.category,
+          hostname: item.hostname,
+          selected: true
+        }))
+      }
+    ]
+  };
+  renderAiSelectionModal();
+}
+
+function openLibraryAiSelectionModal() {
+  if (state.libraryBulkAiRunning) {
+    return;
+  }
+
+  const sessions = buildLibraryAiSelectionSessions();
+  if (!sessions.length) {
+    setStatus("Select one or more sessions or tabs in the Library before using AI.", "error");
+    return;
+  }
+
+  state.aiSelectionModal = {
+    open: true,
+    mode: "library",
+    sessions
+  };
+  renderAiSelectionModal();
+}
+
+function buildLibraryAiSelectionSessions() {
+  const sessions = [];
+
+  for (const session of state.recentArchives) {
+    const selectedKeys = new Set(
+      session.items
+        .map((item) => getArchiveItemEditorKey(session.id, item))
+        .filter((itemKey) => state.selectedArchiveItemKeys.has(itemKey))
+    );
+    const hasExplicitTabs = selectedKeys.size > 0;
+    const includeSession = state.selectedSessionIds.has(session.id) || hasExplicitTabs;
+
+    if (!includeSession) {
+      continue;
+    }
+
+    sessions.push({
+      id: session.id,
+      title: session.title,
+      sourceLabel: "Browsing Library",
+      items: session.items.map((item) => {
+        const itemKey = getArchiveItemEditorKey(session.id, item);
+
+        return {
+          key: itemKey,
+          title: item.title,
+          url: item.url,
+          category: item.category,
+          hostname: item.hostname,
+          selected: hasExplicitTabs ? selectedKeys.has(itemKey) : true
+        };
+      })
+    });
+  }
+
+  return sessions;
+}
+
+function closeAiSelectionModal() {
+  if (!state.aiSelectionModal.open) {
+    return;
+  }
+
+  state.aiSelectionModal = {
+    open: false,
+    mode: null,
+    sessions: []
+  };
+  renderAiSelectionModal();
+}
+
+async function handleConfirmAiSelectionModal() {
+  const modalTargets = getAiSelectionModalTargets();
+  if (!modalTargets.length) {
+    setStatus("Select at least one tab before using AI.", "error");
+    return;
+  }
+
+  const mode = state.aiSelectionModal.mode;
+  closeAiSelectionModal();
+
+  if (mode === "draft") {
+    await handleBulkFillWithAi(modalTargets.map((target) => target.itemId));
+    return;
+  }
+
+  if (mode === "library") {
+    await handleLibraryBulkFillWithAi(
+      modalTargets.map((target) => ({
+        sessionId: target.sessionId,
+        itemKey: target.itemKey
+      }))
+    );
+  }
+}
+
+function renderAiSelectionModal() {
+  const modal = state.aiSelectionModal;
+  elements.aiSelectionModal.hidden = !modal.open;
+
+  if (!modal.open) {
+    elements.aiSelectionTitle.textContent = "Review AI Selection";
+    elements.aiSelectionSummary.textContent = "";
+    elements.aiSelectionSessionList.innerHTML = "";
+    elements.aiSelectionConfirmButton.disabled = true;
+    elements.aiSelectionConfirmButton.textContent = "Use AI";
+    return;
+  }
+
+  const selectedTargets = getAiSelectionModalTargets();
+  const selectedCount = selectedTargets.length;
+  const categoryCount = new Set(selectedTargets.map((target) => target.category)).size;
+  const sessionCount = modal.sessions.length;
+
+  elements.aiSelectionTitle.textContent =
+    modal.mode === "library" ? "Review Library AI Selection" : "Review Draft AI Selection";
+  elements.aiSelectionSummary.textContent =
+    modal.mode === "library"
+      ? `${selectedCount} selected tab${selectedCount === 1 ? "" : "s"} across ${categoryCount} categor${categoryCount === 1 ? "y" : "ies"} in ${sessionCount} session${sessionCount === 1 ? "" : "s"}.`
+      : `${selectedCount} selected tab${selectedCount === 1 ? "" : "s"} across ${categoryCount} categor${categoryCount === 1 ? "y" : "ies"} in the current draft.`;
+  elements.aiSelectionConfirmButton.disabled = selectedCount === 0;
+  elements.aiSelectionConfirmButton.textContent =
+    `Use AI on ${selectedCount} tab${selectedCount === 1 ? "" : "s"}`;
+  elements.aiSelectionSessionList.innerHTML = "";
+
+  for (const session of modal.sessions) {
+    elements.aiSelectionSessionList.appendChild(renderAiSelectionSession(session));
+  }
+}
+
+function renderAiSelectionSession(session) {
+  const section = document.createElement("section");
+  section.className = "ai-selection-session";
+
+  const header = document.createElement("div");
+  header.className = "ai-selection-session-header";
+
+  const label = document.createElement("label");
+  label.className = "ai-selection-session-label";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  const selectedCount = session.items.filter((item) => item.selected).length;
+  checkbox.checked = selectedCount === session.items.length && session.items.length > 0;
+  checkbox.indeterminate = selectedCount > 0 && selectedCount < session.items.length;
+  checkbox.addEventListener("change", () => {
+    toggleAiSelectionSession(session.id, checkbox.checked);
+  });
+
+  const copy = document.createElement("div");
+  copy.className = "ai-selection-session-copy";
+  const title = document.createElement("strong");
+  title.textContent = session.title;
+  const detail = document.createElement("small");
+  detail.textContent = session.sourceLabel;
+  copy.append(title, detail);
+  label.append(checkbox, copy);
+
+  const meta = document.createElement("div");
+  meta.className = "ai-selection-session-meta";
+  const totalCategories = new Set(session.items.map((item) => item.category)).size;
+  meta.textContent =
+    `${selectedCount} / ${session.items.length} tabs selected · ${totalCategories} categor${totalCategories === 1 ? "y" : "ies"}`;
+
+  header.append(label, meta);
+  section.appendChild(header);
+
+  const items = document.createElement("div");
+  items.className = "ai-selection-items";
+
+  for (const item of session.items) {
+    items.appendChild(renderAiSelectionItem(session.id, item));
+  }
+
+  section.appendChild(items);
+  return section;
+}
+
+function renderAiSelectionItem(sessionId, item) {
+  const article = document.createElement("article");
+  article.className = "ai-selection-item";
+
+  const row = document.createElement("div");
+  row.className = "ai-selection-item-row";
+
+  const toggle = document.createElement("label");
+  toggle.className = "ai-selection-item-toggle";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = item.selected;
+  checkbox.addEventListener("change", () => {
+    toggleAiSelectionItem(sessionId, item.key, checkbox.checked);
+  });
+
+  const copy = document.createElement("div");
+  copy.className = "ai-selection-item-copy";
+  const title = document.createElement("strong");
+  title.textContent = item.title;
+  const meta = document.createElement("small");
+  meta.textContent = `${item.category} · ${item.hostname || getHostname(item.url)}`;
+  copy.append(title, meta);
+  toggle.append(checkbox, copy);
+
+  const url = document.createElement("a");
+  url.className = "ai-selection-item-url";
+  url.href = item.url;
+  url.target = "_blank";
+  url.rel = "noreferrer";
+  url.textContent = item.url;
+
+  row.append(toggle, url);
+  article.appendChild(row);
+  return article;
+}
+
+function toggleAiSelectionSession(sessionId, selected) {
+  state.aiSelectionModal = {
+    ...state.aiSelectionModal,
+    sessions: state.aiSelectionModal.sessions.map((session) =>
+      session.id === sessionId
+        ? {
+            ...session,
+            items: session.items.map((item) => ({
+              ...item,
+              selected
+            }))
+          }
+        : session
+    )
+  };
+  renderAiSelectionModal();
+}
+
+function toggleAiSelectionItem(sessionId, itemKey, selected) {
+  state.aiSelectionModal = {
+    ...state.aiSelectionModal,
+    sessions: state.aiSelectionModal.sessions.map((session) =>
+      session.id === sessionId
+        ? {
+            ...session,
+            items: session.items.map((item) =>
+              item.key === itemKey
+                ? {
+                    ...item,
+                    selected
+                  }
+                : item
+            )
+          }
+        : session
+    )
+  };
+  renderAiSelectionModal();
+}
+
+function getAiSelectionModalTargets() {
+  const targets = [];
+  const mode = state.aiSelectionModal.mode;
+
+  for (const session of state.aiSelectionModal.sessions) {
+    for (const item of session.items) {
+      if (!item.selected) {
+        continue;
+      }
+
+      if (mode === "draft") {
+        targets.push({
+          itemId: item.key,
+          category: item.category
+        });
+        continue;
+      }
+
+      targets.push({
+        sessionId: session.id,
+        itemKey: item.key,
+        category: item.category
+      });
+    }
+  }
+
+  return targets;
 }
 
 function renderCategories() {
+  const isSavePhase = state.phase === "save";
   const groups = getVisibleGroups();
   elements.categories.innerHTML = "";
 
@@ -682,7 +1075,6 @@ function renderCategories() {
       "aria-label",
       `${isCollapsed ? "Expand" : "Collapse"} tab ${group.name}`
     );
-    toggleGlyph.textContent = isCollapsed ? "▸" : "▾";
     if (isCollapsed) {
       categoryNode.classList.add("is-collapsed");
     }
@@ -696,12 +1088,26 @@ function renderCategories() {
     const renameSaveButton = categoryNode.querySelector(".category-rename-save");
     const renameCancelButton = categoryNode.querySelector(".category-rename-cancel");
     const originalName = group.name;
+    const itemCountValue = group.items.length;
 
     categoryInput.addEventListener("input", () => {
-      renameSaveButton.disabled = categoryInput.value === originalName;
+      renameSaveButton.disabled = isSavePhase || cleanCategory(categoryInput.value) === originalName;
     });
+    categoryInput.disabled = isSavePhase;
+    categoryToggle.disabled = isSavePhase;
+    renameSaveButton.disabled = isSavePhase || categoryInput.value === originalName;
+    renameCancelButton.disabled = isSavePhase;
+    renameCancelButton.setAttribute(
+      "aria-label",
+      `Delete category ${group.name} from draft`
+    );
+    renameCancelButton.title = `Delete category and remove ${itemCountValue} tab${itemCountValue === 1 ? "" : "s"}`;
 
     renameSaveButton.addEventListener("click", async () => {
+      if (state.phase === "save") {
+        return;
+      }
+
       const nextCategory = cleanCategory(categoryInput.value);
       renameCategory(group.name, nextCategory);
       await persistDraft();
@@ -710,9 +1116,24 @@ function renderCategories() {
     });
 
     renameCancelButton.addEventListener("click", async () => {
+      if (state.phase === "save") {
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Delete category "${group.name}" and remove ${itemCountValue} tab${itemCountValue === 1 ? "" : "s"} from this draft?`
+      );
+      if (!confirmed) {
+        return;
+      }
+
       state.items = state.items.filter((item) => item.category !== group.name);
       await persistDraft();
       render();
+      setStatus(
+        `Deleted category "${group.name}" and removed ${itemCountValue} tab${itemCountValue === 1 ? "" : "s"} from the draft.`,
+        "success"
+      );
     });
 
     for (const item of group.items) {
@@ -724,6 +1145,7 @@ function renderCategories() {
 }
 
 function renderTabItem(item) {
+  const isSavePhase = state.phase === "save";
   const tabNode = elements.tabTemplate.content.firstElementChild.cloneNode(true);
   const title = tabNode.querySelector(".tab-title");
   const link = tabNode.querySelector(".tab-link");
@@ -744,12 +1166,18 @@ function renderTabItem(item) {
   link.href = item.url;
   link.textContent = item.url;
   hostnamePill.textContent = item.hostname;
-  aiButton.textContent = isAiLoading ? "Generating..." : "Fill with AI";
-  aiButton.disabled = isAiLoading || state.bulkAiRunning;
+  aiButton.innerHTML = isAiLoading
+    ? `<span>Generating...</span>`
+    : `${ICONS.sparkle}<span>Fill with AI</span>`;
+  aiButton.disabled = isAiLoading || state.bulkAiRunning || isSavePhase;
   categoryInput.value = item.category;
   tagsInput.value = item.tags.join(", ");
   descriptionInput.value = item.description;
   summaryInput.value = item.summary;
+  categoryInput.disabled = isSavePhase;
+  tagsInput.disabled = isSavePhase;
+  descriptionInput.disabled = isSavePhase;
+  summaryInput.disabled = isSavePhase;
 
   const completionDot = tabNode.querySelector(".tab-completion-dot");
   const completionSr = tabNode.querySelector(".tab-completion-sr");
@@ -784,10 +1212,13 @@ function renderTabItem(item) {
   } else {
     expandToggle.setAttribute("aria-expanded", "true");
     expandToggle.setAttribute("aria-label", "Collapse tab fields");
-    expandGlyph.textContent = "▾";
   }
 
   function toggleExpand() {
+    if (state.phase === "save") {
+      return;
+    }
+
     const isNowCollapsed = tabNode.classList.toggle("is-collapsed");
     const expanded = !isNowCollapsed;
     if (expanded) {
@@ -797,7 +1228,6 @@ function renderTabItem(item) {
     }
     expandToggle.setAttribute("aria-expanded", String(expanded));
     expandToggle.setAttribute("aria-label", expanded ? "Collapse tab fields" : "Expand tab fields");
-    expandGlyph.textContent = expanded ? "▾" : "▸";
   }
 
   expandToggle.addEventListener("click", (e) => {
@@ -818,7 +1248,6 @@ function renderTabItem(item) {
       state.expandedTabIds.add(item.id);
       expandToggle.setAttribute("aria-expanded", "true");
       expandToggle.setAttribute("aria-label", "Collapse tab fields");
-      expandGlyph.textContent = "▾";
     }
   });
 
@@ -851,6 +1280,9 @@ function renderTabItem(item) {
   }
 
   aiButton.addEventListener("click", () => {
+    if (state.phase === "save") {
+      return;
+    }
     handleFillWithAi(item.id);
   });
 
@@ -881,9 +1313,9 @@ function renderTabItem(item) {
   return tabNode;
 }
 
-function renderArchiveExplorer() {
-  const archiveView = getArchiveView();
+function renderArchiveExplorer(archiveView = getArchiveView()) {
   elements.recentArchives.innerHTML = "";
+  updateLibraryBulkAiButton(archiveView);
 
   renderArchiveFilterSelects();
   renderArchiveActiveFilters();
@@ -1102,11 +1534,11 @@ function renderArchiveSession(session) {
   if (session.aiEnrichmentStatus === "pending") {
     aiBadge.hidden = false;
     aiBadge.dataset.status = "pending";
-    aiBadge.textContent = "✦ AI enriching…";
+    aiBadge.innerHTML = `${ICONS.sparkle} AI enriching…`;
   } else if (session.aiEnrichmentStatus === "failed") {
     aiBadge.hidden = false;
     aiBadge.dataset.status = "failed";
-    aiBadge.textContent = "⚠ Retry AI";
+    aiBadge.innerHTML = `${ICONS.warning} Retry AI`;
     aiBadge.addEventListener("click", () => handleRetryAiEnrichment(session.id));
   }
   const isCollapsed = state.collapsedArchiveSessions.includes(session.id);
@@ -1116,7 +1548,6 @@ function renderArchiveSession(session) {
     "aria-label",
     `${isCollapsed ? "Expand" : "Collapse"} saved session ${session.title}`
   );
-  toggleGlyph.textContent = isCollapsed ? "▸" : "▾";
   if (isCollapsed) {
     node.classList.add("is-collapsed");
   }
@@ -1175,6 +1606,7 @@ function renderArchiveItemCard(session, item) {
 
   const editorKey = getArchiveItemEditorKey(session.id, item);
   const isEditing = state.editingArchiveItemKey === editorKey;
+  const isSelected = state.selectedArchiveItemKeys.has(editorKey);
 
   const topRow = document.createElement("div");
   topRow.className = "history-tab-card-top";
@@ -1190,6 +1622,22 @@ function renderArchiveItemCard(session, item) {
 
   const actions = document.createElement("div");
   actions.className = "history-item-actions";
+  const itemKey = getArchiveItemEditorKey(session.id, item);
+  const currentAiStatus = state.aiStatuses[itemKey];
+  const isAiLoading = Boolean(state.aiRequestTokens[itemKey]);
+  const itemCheckbox = document.createElement("input");
+  itemCheckbox.type = "checkbox";
+  itemCheckbox.className = "archive-item-select-checkbox";
+  itemCheckbox.checked = isSelected;
+  itemCheckbox.setAttribute("aria-label", `Select tab ${item.title}`);
+  itemCheckbox.addEventListener("change", () => {
+    if (itemCheckbox.checked) {
+      state.selectedArchiveItemKeys.add(itemKey);
+    } else {
+      state.selectedArchiveItemKeys.delete(itemKey);
+    }
+    renderArchiveExplorer();
+  });
 
   const editButton = document.createElement("button");
   editButton.type = "button";
@@ -1212,8 +1660,19 @@ function renderArchiveItemCard(session, item) {
     handleDeleteArchiveItem(session, item);
   });
 
-  actions.append(editButton, deleteButton);
-  topRow.append(categoryButton, actions);
+  const aiButton = document.createElement("button");
+  aiButton.type = "button";
+  aiButton.className = "tab-ai-button small-button";
+  aiButton.innerHTML = isAiLoading
+    ? `${ICONS.sparkle}<span>Generating...</span>`
+    : `${ICONS.sparkle}<span>Fill with AI</span>`;
+  aiButton.disabled = isAiLoading || state.libraryBulkAiRunning;
+  aiButton.addEventListener("click", () => {
+    handleArchiveFillWithAi(session.id, item);
+  });
+
+  actions.append(aiButton, editButton, deleteButton);
+  topRow.append(itemCheckbox, categoryButton, actions);
   row.appendChild(topRow);
 
   if (item.tags.length) {
@@ -1255,6 +1714,16 @@ function renderArchiveItemCard(session, item) {
   meta.className = "history-item-meta";
   meta.textContent = `Saved ${formatDateTime(item.archivedAt || session.createdAt)}`;
   row.appendChild(meta);
+
+  if (currentAiStatus?.message) {
+    const aiStatus = document.createElement("p");
+    aiStatus.className = "tab-ai-status history-item-ai-status";
+    aiStatus.textContent = currentAiStatus.message;
+    if (currentAiStatus.tone) {
+      aiStatus.dataset.tone = currentAiStatus.tone;
+    }
+    row.appendChild(aiStatus);
+  }
 
   if (isEditing && state.archiveItemEditor) {
     row.appendChild(renderArchiveItemEditor());
@@ -1349,8 +1818,22 @@ async function handleFillWithAi(itemId) {
   await runAiFillForItem(itemId);
 }
 
-async function handleBulkFillWithAi() {
-  if (!state.items.length || state.bulkAiRunning) {
+async function handleArchiveFillWithAi(sessionId, item) {
+  const result = await runAiFillForArchiveItem(sessionId, item);
+  if (!result?.ok) {
+    return;
+  }
+
+  setStatus(
+    result.changed
+      ? `Updated "${item.title}" with AI metadata.`
+      : `AI reviewed "${item.title}" but did not change its metadata.`,
+    "success"
+  );
+}
+
+async function handleBulkFillWithAi(selectedItemIds = state.items.map((item) => item.id)) {
+  if (!state.items.length || state.bulkAiRunning || state.phase === "save") {
     return;
   }
 
@@ -1367,7 +1850,11 @@ async function handleBulkFillWithAi() {
   state.bulkAiPaused = false;
   render();
 
-  const itemIds = state.items.map((item) => item.id);
+  const itemIds = selectedItemIds.filter((itemId) => getDraftItem(itemId));
+  if (!itemIds.length) {
+    setStatus("Select at least one draft tab before using AI.", "error");
+    return;
+  }
   let completed = 0;
   let updated = 0;
   let failed = 0;
@@ -1431,6 +1918,67 @@ async function handleBulkFillWithAi() {
   }
 
   setStatus(formatBulkAiStatus(completed, updated, 0, mergedCategoryCount), "success");
+}
+
+async function handleLibraryBulkFillWithAi(targets = getSelectedLibraryAiTargets()) {
+  if (state.libraryBulkAiRunning) {
+    return;
+  }
+
+  if (!targets.length) {
+    setStatus("Select one or more sessions or tabs in the Library before using AI.", "error");
+    return;
+  }
+
+  try {
+    getGeminiConfig();
+  } catch (error) {
+    setStatus(getErrorMessage(error, "Could not generate library metadata."), "error");
+    return;
+  }
+
+  state.libraryBulkAiRunning = true;
+  render();
+
+  let completed = 0;
+  let updated = 0;
+  let failed = 0;
+
+  try {
+    for (const target of targets) {
+      const currentItem = getArchiveItemByKey(target.sessionId, target.itemKey);
+      if (!currentItem) {
+        continue;
+      }
+
+      completed += 1;
+      setStatus(`Using AI on ${completed} of ${targets.length} library tabs...`);
+      const result = await runAiFillForArchiveItem(target.sessionId, currentItem);
+      if (result?.ok) {
+        if (result.changed) {
+          updated += 1;
+        }
+      } else {
+        failed += 1;
+      }
+    }
+  } finally {
+    state.libraryBulkAiRunning = false;
+    render();
+  }
+
+  if (failed) {
+    setStatus(
+      `AI reviewed ${completed} library tab${completed === 1 ? "" : "s"}. Updated ${updated}, ${failed} failed.`,
+      "error"
+    );
+    return;
+  }
+
+  setStatus(
+    `AI reviewed ${completed} library tab${completed === 1 ? "" : "s"} and updated ${updated}.`,
+    "success"
+  );
 }
 
 function handlePauseAi() {
@@ -1526,6 +2074,93 @@ async function runAiFillForItem(itemId) {
   }
 }
 
+async function runAiFillForArchiveItem(sessionId, item) {
+  const itemKey = getArchiveItemEditorKey(sessionId, item);
+  const currentItem = getArchiveItemByKey(sessionId, itemKey);
+  if (!currentItem) {
+    return { ok: false, changed: false };
+  }
+
+  const aiInput = buildArchiveAiInput(currentItem, itemKey);
+  const categoryContext = buildCategoryContext();
+  const requestToken = makeId("archive-ai-fill");
+
+  state.aiRequestTokens = {
+    ...state.aiRequestTokens,
+    [itemKey]: requestToken
+  };
+  state.aiStatuses = {
+    ...state.aiStatuses,
+    [itemKey]: {
+      message: "Generating library metadata...",
+      tone: null
+    }
+  };
+  renderArchiveExplorer();
+
+  try {
+    const payload = await requestAiFillPayload(aiInput, categoryContext);
+    if (!isCurrentAiRequest(itemKey, requestToken)) {
+      return { ok: false, changed: false };
+    }
+
+    const latestItem = getArchiveItemByKey(sessionId, itemKey);
+    if (!latestItem) {
+      clearAiRequest(itemKey, requestToken);
+      return { ok: false, changed: false };
+    }
+
+    const nextValues = {
+      category: cleanCategory(payload.category),
+      description: payload.description.trim(),
+      summary: payload.summary.trim(),
+      tags: normalizeTags(payload.tags)
+    };
+    const changed = didArchiveItemChange(latestItem, nextValues);
+
+    const response = await extensionApi.runtime.sendMessage({
+      type: "update-archive-item",
+      payload: {
+        sessionId,
+        bookmarkId: latestItem.bookmarkId,
+        title: latestItem.title,
+        url: latestItem.url,
+        category: nextValues.category,
+        description: nextValues.description,
+        summary: nextValues.summary,
+        tags: nextValues.tags
+      }
+    });
+
+    if (!response?.ok) {
+      throw new Error(response?.error || "Could not update the Browsing Library tab.");
+    }
+
+    applyArchiveItemUpdateToState(sessionId, itemKey, nextValues);
+
+    clearAiRequest(itemKey, requestToken, {
+      message: changed ? "AI metadata saved." : "No AI changes were applied.",
+      tone: "success"
+    });
+    renderArchiveExplorer();
+    return { ok: true, changed };
+  } catch (error) {
+    console.error("Failed to fill library item with AI", error);
+    if (!isCurrentAiRequest(itemKey, requestToken)) {
+      return { ok: false, changed: false };
+    }
+
+    const message = getErrorMessage(error, "Could not generate library metadata.");
+    clearAiRequest(itemKey, requestToken, {
+      message,
+      tone: "error"
+    });
+    setStatus(message, "error");
+    renderArchiveExplorer();
+    return { ok: false, changed: false };
+  }
+}
+
 function updateItem(id, updates) {
   state.items = state.items.map((item) =>
     item.id === id
@@ -1600,6 +2235,10 @@ function toggleArchiveSession(sessionId) {
 }
 
 async function handleToggleDraftCollapse() {
+  if (state.phase === "save") {
+    return;
+  }
+
   if (!state.items.length) {
     return;
   }
@@ -1658,13 +2297,16 @@ function handleDocumentClick(event) {
 }
 
 function handleDocumentKeydown(event) {
-  if (event.key !== "Escape" || !state.settingsOpen) {
+  if (event.key === "Escape" && state.aiSelectionModal.open) {
+    closeAiSelectionModal();
     return;
   }
 
-  state.settingsOpen = false;
-  state.geminiApiKeyVisible = false;
-  render();
+  if (event.key === "Escape" && state.settingsOpen) {
+    state.settingsOpen = false;
+    state.geminiApiKeyVisible = false;
+    render();
+  }
 }
 
 function clearAiStatus(itemId) {
@@ -1740,6 +2382,7 @@ async function clearDraftState() {
   state.skippedCount = 0;
   state.lastScannedAt = null;
   state.collapsedCategories = [];
+  state.expandedTabIds = new Set();
   resetAiState();
   await extensionApi.storage.local.remove(DRAFT_KEY);
 }
@@ -2192,6 +2835,10 @@ function sortArchiveItems(items) {
 }
 
 function getFilteredItems() {
+  if (state.phase === "save") {
+    return state.items;
+  }
+
   if (!state.filterQuery.trim()) {
     return state.items;
   }
@@ -2323,11 +2970,16 @@ function isBookmarkableTab(tab) {
 
   const blockedProtocols = [
     "chrome://",
+    "chrome-error://",
+    "chrome-search://",
     "chrome-extension://",
     "edge://",
     "about:",
     "moz-extension://",
-    "devtools://"
+    "devtools://",
+    "javascript:",
+    "data:",
+    "view-source:"
   ];
 
   return !blockedProtocols.some((protocol) => tab.url.startsWith(protocol));
@@ -2721,6 +3373,143 @@ function getDraftItem(itemId) {
   return state.items.find((item) => item.id === itemId) || null;
 }
 
+function updateLibraryBulkAiButton(archiveView) {
+  const selectedTargets = getSelectedLibraryAiTargets();
+  const selectedCount = selectedTargets.length;
+  elements.libraryBulkFillAiButton.disabled = !selectedCount || state.libraryBulkAiRunning;
+  elements.libraryBulkFillAiButton.innerHTML = state.libraryBulkAiRunning
+    ? `${ICONS.sparkle}<span>Using AI...</span>`
+    : `${ICONS.sparkle}<span>Use AI</span>`;
+  elements.libraryBulkFillAiButton.title = selectedCount
+    ? buildLibraryAiSelectionTitle(selectedTargets)
+    : "Select one or more sessions or tabs to use AI";
+}
+
+function buildLibraryAiSelectionTitle(selectedTargets) {
+  const sessionCount = new Set(selectedTargets.map((target) => target.sessionId)).size;
+  const tabCount = selectedTargets.length;
+  return `Use AI on ${tabCount} selected tab${tabCount === 1 ? "" : "s"} across ${sessionCount} session${sessionCount === 1 ? "" : "s"}`;
+}
+
+function getSelectedLibraryAiTargets() {
+  const targets = [];
+
+  for (const session of state.recentArchives) {
+    const explicitItems = session.items
+      .map((item) => ({
+        item,
+        itemKey: getArchiveItemEditorKey(session.id, item)
+      }))
+      .filter(({ itemKey }) => state.selectedArchiveItemKeys.has(itemKey));
+
+    if (explicitItems.length) {
+      for (const { itemKey } of explicitItems) {
+        targets.push({
+          sessionId: session.id,
+          itemKey
+        });
+      }
+      continue;
+    }
+
+    if (!state.selectedSessionIds.has(session.id)) {
+      continue;
+    }
+
+    for (const item of session.items) {
+      targets.push({
+        sessionId: session.id,
+        itemKey: getArchiveItemEditorKey(session.id, item)
+      });
+    }
+  }
+
+  return targets;
+}
+
+function getArchiveItemByKey(sessionId, itemKey) {
+  const session = state.recentArchives.find((entry) => String(entry.id) === String(sessionId));
+  if (!session) {
+    return null;
+  }
+
+  return session.items.find((entry) => getArchiveItemEditorKey(sessionId, entry) === itemKey) || null;
+}
+
+function buildArchiveAiInput(item, itemKey) {
+  return {
+    id: itemKey,
+    title: item.title,
+    url: item.url,
+    hostname: item.hostname || getHostname(item.url),
+    category: cleanCategory(item.category),
+    description: item.description || "",
+    summary: item.summary || generateSummary(item.title, item.url),
+    tags: Array.isArray(item.tags) ? item.tags : parseTags(item.tags),
+    fieldSources: {
+      category: FIELD_SOURCES.heuristic,
+      tags: FIELD_SOURCES.heuristic,
+      description: FIELD_SOURCES.heuristic,
+      summary: FIELD_SOURCES.heuristic
+    }
+  };
+}
+
+function didArchiveItemChange(item, nextValues) {
+  return (
+    item.category !== nextValues.category ||
+    item.description !== nextValues.description ||
+    item.summary !== nextValues.summary ||
+    !areStringArraysEqual(item.tags || [], nextValues.tags || [])
+  );
+}
+
+function applyArchiveItemUpdateToState(sessionId, itemKey, nextValues) {
+  state.recentArchives = state.recentArchives.map((session) => {
+    if (String(session.id) !== String(sessionId)) {
+      return session;
+    }
+
+    const nextItems = session.items
+      .map((item) =>
+        getArchiveItemEditorKey(session.id, item) === itemKey
+          ? {
+              ...item,
+              ...nextValues
+            }
+          : item
+      )
+      .sort((left, right) => {
+        const categoryCompare = String(left.category || "").localeCompare(String(right.category || ""));
+        if (categoryCompare !== 0) {
+          return categoryCompare;
+        }
+
+        return String(left.title || "").localeCompare(String(right.title || ""));
+      });
+    const categories = [...new Set(nextItems.map((item) => item.category))].sort();
+    const categoryMeta = normalizeCategoryMeta(session.categoryMeta, categories, nextItems);
+
+    return {
+      ...session,
+      items: nextItems,
+      totalItemCount: nextItems.length,
+      categories: buildSessionCategories(nextItems, categoryMeta),
+      categoryMeta
+    };
+  });
+
+  if (state.editingArchiveItemKey === itemKey && state.archiveItemEditor) {
+    state.archiveItemEditor = {
+      ...state.archiveItemEditor,
+      category: nextValues.category,
+      description: nextValues.description,
+      summary: nextValues.summary,
+      tagsText: nextValues.tags.join(", ")
+    };
+  }
+}
+
 function inferDescriptionFieldSource(item) {
   return isBlankString(item?.description) ? FIELD_SOURCES.heuristic : FIELD_SOURCES.user;
 }
@@ -2781,7 +3570,7 @@ async function requestAiFillPayload(item, categoryContext = buildCategoryContext
 function getGeminiConfig() {
   const apiKey = String(state.settings.geminiApiKey || "").trim();
   if (!apiKey) {
-    throw new Error("Add your Gemini API key in Settings (⚙) to use AI fill.");
+    throw new Error("Add your Gemini API key in Settings to use AI fill.");
   }
 
   return {
@@ -3246,15 +4035,6 @@ function clearArchiveFilters() {
   };
 }
 
-function normalizeLibraryWidth(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return DEFAULT_LIBRARY_WIDTH;
-  }
-
-  return Math.max(MIN_LIBRARY_WIDTH, Math.min(MAX_LIBRARY_WIDTH, numeric));
-}
-
 function normalizeSettings(value) {
   if (!value || typeof value !== "object") {
     return { ...DEFAULT_SETTINGS };
@@ -3266,130 +4046,6 @@ function normalizeSettings(value) {
     geminiApiKey: String(value.geminiApiKey || "").trim(),
     geminiModel: String(value.geminiModel || DEFAULT_GEMINI_MODEL).trim() || DEFAULT_GEMINI_MODEL
   };
-}
-
-function getLibraryWidthBounds() {
-  const layoutWidth = elements.layoutPanel?.getBoundingClientRect().width || 0;
-  const maxWidth = Math.min(MAX_LIBRARY_WIDTH, Math.max(MIN_LIBRARY_WIDTH, layoutWidth - MIN_DRAFT_WIDTH));
-
-  return {
-    min: MIN_LIBRARY_WIDTH,
-    max: maxWidth
-  };
-}
-
-function clampLibraryWidth(value) {
-  const bounds = getLibraryWidthBounds();
-  return Math.min(bounds.max, Math.max(bounds.min, value));
-}
-
-function isStackedLayout() {
-  return window.innerWidth <= STACKED_LAYOUT_BREAKPOINT;
-}
-
-function applyLayoutSizing() {
-  if (!elements.layoutPanel || !elements.layoutResizer) {
-    return;
-  }
-
-  if (isStackedLayout()) {
-    elements.layoutPanel.style.removeProperty("--library-width");
-    elements.layoutResizer.setAttribute("aria-disabled", "true");
-    elements.layoutResizer.tabIndex = -1;
-    return;
-  }
-
-  state.libraryWidth = clampLibraryWidth(state.libraryWidth);
-  elements.layoutPanel.style.setProperty("--library-width", `${state.libraryWidth}px`);
-  elements.layoutResizer.setAttribute("aria-disabled", "false");
-  elements.layoutResizer.tabIndex = 0;
-
-  const bounds = getLibraryWidthBounds();
-  elements.layoutResizer.setAttribute("aria-valuemin", String(bounds.min));
-  elements.layoutResizer.setAttribute("aria-valuemax", String(bounds.max));
-  elements.layoutResizer.setAttribute("aria-valuenow", String(Math.round(state.libraryWidth)));
-}
-
-async function persistLibraryWidth() {
-  await extensionApi.storage.local.set({
-    [LIBRARY_WIDTH_KEY]: Math.round(state.libraryWidth)
-  });
-}
-
-function updateLibraryWidth(nextWidth) {
-  const clamped = clampLibraryWidth(nextWidth);
-  if (clamped === state.libraryWidth) {
-    return;
-  }
-
-  state.libraryWidth = clamped;
-  applyLayoutSizing();
-}
-
-function handleResizerPointerDown(event) {
-  if (isStackedLayout()) {
-    return;
-  }
-
-  event.preventDefault();
-  const resizer = event.currentTarget;
-  const startX = event.clientX;
-  const startWidth = state.libraryWidth;
-
-  if (typeof resizer.setPointerCapture === "function") {
-    resizer.setPointerCapture(event.pointerId);
-  }
-
-  const onPointerMove = (moveEvent) => {
-    const nextWidth = startWidth + (startX - moveEvent.clientX);
-    updateLibraryWidth(nextWidth);
-  };
-
-  const onPointerUp = async () => {
-    window.removeEventListener("pointermove", onPointerMove);
-    window.removeEventListener("pointerup", onPointerUp);
-    if (typeof resizer.releasePointerCapture === "function") {
-      try {
-        resizer.releasePointerCapture(event.pointerId);
-      } catch (_error) {
-        // Ignore lost pointer capture state.
-      }
-    }
-    document.body.classList.remove("is-resizing-layout");
-    await persistLibraryWidth();
-  };
-
-  document.body.classList.add("is-resizing-layout");
-  window.addEventListener("pointermove", onPointerMove);
-  window.addEventListener("pointerup", onPointerUp, { once: true });
-}
-
-async function handleResizerKeyDown(event) {
-  if (isStackedLayout()) {
-    return;
-  }
-
-  let nextWidth = state.libraryWidth;
-
-  if (event.key === "ArrowLeft") {
-    nextWidth += RESIZER_STEP;
-  } else if (event.key === "ArrowRight") {
-    nextWidth -= RESIZER_STEP;
-  } else if (event.key === "Home") {
-    nextWidth = getLibraryWidthBounds().max;
-  } else if (event.key === "End") {
-    nextWidth = getLibraryWidthBounds().min;
-  } else {
-    return;
-  }
-
-  event.preventDefault();
-  updateLibraryWidth(nextWidth);
-  await persistLibraryWidth();
-}
-
-function handleWindowResize() {
-  applyLayoutSizing();
 }
 
 function escapeHtml(value) {
@@ -3442,7 +4098,9 @@ function handleImportToggle() {
   state.importOpen = !state.importOpen;
   elements.importPanel.hidden = !state.importOpen;
   elements.importToggleButton.setAttribute("aria-expanded", String(state.importOpen));
-  elements.importToggleButton.textContent = state.importOpen ? "✕ Close" : "↓ Import";
+  elements.importToggleButton.innerHTML = state.importOpen
+    ? `${ICONS.close} Close`
+    : `${ICONS.download} Import`;
 }
 
 async function loadBookmarkFolders() {
@@ -3507,7 +4165,7 @@ async function handleImportRun() {
       state.importOpen = false;
       elements.importPanel.hidden = true;
       elements.importToggleButton.setAttribute("aria-expanded", "false");
-      elements.importToggleButton.textContent = "↓ Import";
+      elements.importToggleButton.innerHTML = `${ICONS.download} Import`;
     }
     // When AI is running, keep panel open to show progress
   } catch (err) {

@@ -28,10 +28,11 @@
               aria-controls="settings-panel"
               aria-label="Open settings"
             >
-              <span class="settings-toggle-icon" aria-hidden="true">⚙</span>
+              <svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 01-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 01-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 01.52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 011.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 011.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 01.52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 01-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 01-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 002.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 001.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 00-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 00-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 00-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 003.06 9.377l-.318-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 004.176 4.82l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 002.692-1.115z"/></svg>
             </button>
             <section id="settings-panel" class="settings-panel" hidden>
               <p class="eyebrow">Settings</p>
+              <h2 class="sr-only">Settings</h2>
               <h3>Save Rules</h3>
               <label class="settings-option">
                 <input id="dedupe-within-session" type="checkbox" />
@@ -130,6 +131,7 @@
             <span class="phase-label">Save</span>
           </div>
         </div>
+        <p id="phase-copy" class="phase-copy"></p>
         <div class="session-row">
           <div id="session-name-field">
             <label class="field">
@@ -175,7 +177,7 @@
         <p id="status-message" class="status-message" aria-live="polite"></p>
       </section>
 
-      <div class="view-tab-bar" role="tablist" aria-label="View selector">
+      <div id="view-tab-bar" class="view-tab-bar" role="tablist" aria-label="View selector">
         <button
           id="view-tab-draft"
           class="view-tab"
@@ -212,11 +214,17 @@
                 Expand All
               </button>
               <button id="bulk-fill-ai" class="ghost-button small-button draft-ai-button" type="button">
-                <span class="tab-ai-icon" aria-hidden="true">✦</span>
+                <svg viewBox="0 0 16 16" fill="currentColor" class="icon tab-ai-icon" aria-hidden="true"><path d="M8 0L9.5 6.5L16 8L9.5 9.5L8 16L6.5 9.5L0 8L6.5 6.5Z"/></svg>
                 <span>Use AI</span>
               </button>
-              <button id="bulk-ai-pause" class="ghost-button small-button" type="button" hidden>⏸ Pause</button>
-              <button id="bulk-ai-stop" class="ghost-button small-button" type="button" hidden>✕ Stop</button>
+              <button id="bulk-ai-pause" class="ghost-button small-button" type="button" hidden>
+                <svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M5.5 3.5A1.5 1.5 0 017 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5zm5 0A1.5 1.5 0 0112 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5z"/></svg>
+                Pause
+              </button>
+              <button id="bulk-ai-stop" class="ghost-button small-button" type="button" hidden>
+                <svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z"/></svg>
+                Stop
+              </button>
             </div>
           </div>
           <div id="categories" class="category-list">
@@ -230,18 +238,6 @@
           </div>
         </div>
 
-        <div
-          id="layout-resizer"
-          class="layout-resizer"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize Browsing Library panel"
-          aria-controls="library-pane"
-          tabindex="0"
-        >
-          <span class="layout-resizer-grip" aria-hidden="true"></span>
-        </div>
-
         <aside id="library-pane" class="history-column">
           <div class="section-heading">
             <div>
@@ -249,12 +245,17 @@
               <h2 tabindex="-1">Library Explorer</h2>
             </div>
             <div class="library-actions">
+              <button id="library-bulk-fill-ai" class="ghost-button small-button draft-ai-button" type="button">
+                <svg viewBox="0 0 16 16" fill="currentColor" class="icon tab-ai-icon" aria-hidden="true"><path d="M8 0L9.5 6.5L16 8L9.5 9.5L8 16L6.5 9.5L0 8L6.5 6.5Z"/></svg>
+                <span>Use AI</span>
+              </button>
               <button id="sync-now" class="ghost-button small-button sync-button" type="button" title="Sync sessions across devices">
-                <span class="sync-icon" aria-hidden="true">⇅</span>
+                <svg viewBox="0 0 16 16" fill="currentColor" class="icon sync-icon" aria-hidden="true"><path fill-rule="evenodd" d="M1 11.5a.5.5 0 00.5.5h11.793l-3.147 3.146a.5.5 0 00.708.708l4-4a.5.5 0 000-.708l-4-4a.5.5 0 00-.708.708L13.293 11H1.5a.5.5 0 00-.5.5zm14-7a.5.5 0 01-.5.5H2.707l3.147 3.146a.5.5 0 11-.708.708l-4-4a.5.5 0 010-.708l4-4a.5.5 0 11.708.708L2.707 4H14.5a.5.5 0 01.5.5z"/></svg>
                 <span>Sync</span>
               </button>
               <button id="import-toggle" class="ghost-button small-button" type="button" aria-expanded="false" aria-controls="import-panel">
-                ↓ Import
+                <svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path fill-rule="evenodd" d="M8 1a.5.5 0 01.5.5v11.793l3.146-3.147a.5.5 0 01.708.708l-4 4a.5.5 0 01-.708 0l-4-4a.5.5 0 01.708-.708L7.5 13.293V1.5A.5.5 0 018 1z"/></svg>
+                Import
               </button>
             </div>
           </div>
@@ -352,19 +353,49 @@
       </section>
     </main>
 
+    <div id="ai-selection-modal" class="modal-overlay" hidden>
+      <section
+        class="modal-panel ai-selection-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ai-selection-title"
+      >
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">AI Scope</p>
+            <h2 id="ai-selection-title">Review AI Selection</h2>
+          </div>
+          <button
+            id="ai-selection-close"
+            class="ghost-button small-button"
+            type="button"
+            aria-label="Close AI selection"
+          >
+            Close
+          </button>
+        </div>
+        <p id="ai-selection-summary" class="panel-note"></p>
+        <div id="ai-selection-session-list" class="ai-selection-session-list"></div>
+        <div class="modal-actions">
+          <button id="ai-selection-cancel" class="ghost-button" type="button">Cancel</button>
+          <button id="ai-selection-confirm" class="primary-button" type="button">Use AI</button>
+        </div>
+      </section>
+    </div>
+
     <template id="category-template">
       <article class="category-card">
         <div class="category-header">
           <button class="category-toggle" type="button" aria-expanded="true">
-            <span class="toggle-glyph" aria-hidden="true">▾</span>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon chevron-icon" aria-hidden="true"><polyline points="4 6 8 10 12 6"/></svg>
           </button>
           <label class="field compact-field">
             <span>Category</span>
             <input class="category-name-input" type="text" />
           </label>
           <div class="category-rename-actions">
-            <button class="category-action-btn category-rename-save" type="button" disabled title="Save rename" aria-label="Save category rename">✓</button>
-            <button class="category-action-btn category-rename-cancel" type="button" title="Remove category from draft" aria-label="Remove category from draft">✕</button>
+            <button class="category-action-btn category-rename-save" type="button" disabled title="Save category rename" aria-label="Save category rename">Save</button>
+            <button class="category-action-btn category-rename-cancel" type="button" title="Delete category from draft">Delete Category</button>
           </div>
           <span class="category-pill item-count-pill"></span>
         </div>
@@ -382,10 +413,10 @@
           <span class="tab-completion-dot" aria-hidden="true" title="Pending"></span>
           <span class="sr-only tab-completion-sr">Pending</span>
           <div class="tab-meta-actions">
-            <span class="toggle-glyph tab-expand-glyph" aria-hidden="true">▸</span>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon chevron-icon tab-expand-glyph" aria-hidden="true"><polyline points="4 6 8 10 12 6"/></svg>
             <span class="hostname-pill"></span>
             <button class="ghost-button small-button tab-ai-button" type="button">
-              <span class="tab-ai-icon" aria-hidden="true">✦</span>
+              <svg viewBox="0 0 16 16" fill="currentColor" class="icon tab-ai-icon" aria-hidden="true"><path d="M8 0L9.5 6.5L16 8L9.5 9.5L8 16L6.5 9.5L0 8L6.5 6.5Z"/></svg>
               <span>Fill with AI</span>
             </button>
           </div>
@@ -430,7 +461,7 @@
         <div class="history-top-row">
           <div class="history-session-main">
             <button class="history-session-toggle" type="button" aria-expanded="true">
-              <span class="toggle-glyph" aria-hidden="true">▾</span>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon chevron-icon" aria-hidden="true"><polyline points="4 6 8 10 12 6"/></svg>
             </button>
             <div class="history-heading">
               <h3 class="history-title"></h3>

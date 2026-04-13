@@ -392,10 +392,6 @@ body {
   justify-content: center;
 }
 
-.settings-toggle-icon {
-  font-size: 0.95rem;
-  line-height: 1;
-}
 
 .settings-panel {
   position: absolute;
@@ -640,7 +636,7 @@ button:disabled {
 }
 
 .status-message[data-tone="success"] {
-  color: #99f6e4;
+  color: #86efac;
 }
 
 .layout-panel {
@@ -667,7 +663,7 @@ button:disabled {
   flex: 1;
   min-width: 0;
   padding: 4px 8px;
-  background: var(--surface-1, #13131a);
+  background: var(--input);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   color: inherit;
@@ -884,13 +880,13 @@ button:disabled {
 .category-rename-save:not(:disabled) {
   color: var(--success);
   cursor: pointer;
-  border-color: rgba(20, 184, 166, 0.3);
-  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.08);
 }
 
 .category-rename-save:not(:disabled):hover {
-  background: rgba(20, 184, 166, 0.12);
-  border-color: rgba(20, 184, 166, 0.3);
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .category-rename-cancel {
@@ -928,9 +924,42 @@ button:disabled {
   background: rgba(31, 41, 55, 0.95);
 }
 
-.toggle-glyph {
-  font-size: 0.9rem;
-  line-height: 1;
+/* === SVG icon base === */
+.icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* === Chevron icons (replace unicode ▾/▸ glyphs) === */
+.chevron-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform 120ms ease;
+  flex-shrink: 0;
+}
+
+/* Category card: collapsed = chevron points right, expanded = points down */
+.category-card.is-collapsed .chevron-icon {
+  transform: rotate(-90deg);
+}
+
+/* Session card: collapsed = chevron points right, expanded = points down */
+.history-card.is-collapsed .chevron-icon {
+  transform: rotate(-90deg);
+}
+
+/* Tab expand glyph: default = points right (collapsed), expanded = points down */
+.tab-expand-glyph {
+  transform: rotate(-90deg);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.tab-card:not(.is-collapsed) .tab-expand-glyph {
+  transform: rotate(0deg);
 }
 
 .category-pill,
@@ -1053,9 +1082,7 @@ button:disabled {
 
 .tab-ai-icon {
   color: #fbbf24;
-  font-size: 0.95rem;
-  line-height: 1;
-  text-shadow: 0 0 12px rgba(251, 191, 36, 0.35);
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.35));
 }
 
 .tab-ai-status {
@@ -1119,7 +1146,7 @@ button:disabled {
 }
 
 .history-title {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -1342,7 +1369,7 @@ body.is-resizing-layout * {
   border: 1.5px solid var(--border);
   background: rgba(15, 23, 42, 0.8);
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -1366,12 +1393,12 @@ body.is-resizing-layout * {
 
 .phase-step.is-done .phase-number {
   border-color: var(--success);
-  background: rgba(20, 184, 166, 0.15);
-  color: #99f6e4;
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
 }
 
 .phase-step.is-done .phase-label {
-  color: #99f6e4;
+  color: #86efac;
   opacity: 0.65;
 }
 
@@ -1437,6 +1464,11 @@ body.is-resizing-layout * {
   color: var(--text);
   border-color: rgba(99, 102, 241, 0.45);
   box-shadow: 0 0 12px rgba(99, 102, 241, 0.08);
+}
+
+.view-tab:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.8);
+  outline-offset: 2px;
 }
 
 /* Layout panel: show only the active view pane, full width */
@@ -1605,8 +1637,6 @@ body.is-resizing-layout * {
 }
 
 .sync-icon {
-  font-size: 1rem;
-  line-height: 1;
   display: inline-block;
   transition: transform 600ms ease;
 }
@@ -1633,7 +1663,7 @@ body.is-resizing-layout * {
   gap: 8px;
 }
 
-.sync-status-bar[data-tone="success"] { color: #99f6e4; border-color: rgba(20, 184, 166, 0.3); }
+.sync-status-bar[data-tone="success"] { color: #86efac; border-color: rgba(34, 197, 94, 0.3); }
 .sync-status-bar[data-tone="error"]   { color: #fda4af; border-color: rgba(239, 68, 68, 0.3); }
 .sync-status-bar[data-tone="info"]    { color: #bfdbfe; border-color: rgba(59, 130, 246, 0.3); }
 
@@ -1838,4 +1868,13 @@ body.is-resizing-layout * {
 @keyframes badge-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.55; }
+}
+
+/* === Reduced motion — disable all animations/transitions for users who prefer it === */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
