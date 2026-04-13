@@ -965,7 +965,7 @@ async function importBookmarksAsSession({ folderId = null, useAi = false } = {})
     ? (await extensionApi.bookmarks.getSubTree(folderId))[0]
     : tree[0];
 
-  const sessions = buildSessionsFromNode(root);
+  const sessions = buildSessionsFromNode(root, Boolean(folderId));
   if (!sessions.length) {
     throw new Error("No bookmark folders found to import.");
   }
@@ -1071,7 +1071,7 @@ async function importBookmarksAsSession({ folderId = null, useAi = false } = {})
   };
 }
 
-function buildSessionsFromNode(rootNode) {
+function buildSessionsFromNode(rootNode, isSubfolderImport = false) {
   const SKIP_TITLES = new Set(["Bookmarks Bar", "Other Bookmarks", "Mobile Bookmarks"]);
   const sessions = [];
 
@@ -1120,7 +1120,8 @@ function buildSessionsFromNode(rootNode) {
     }
   }
 
-  walkFolder(rootNode, true);
+  // When importing a specific subfolder, treat it as a folder-level walk
+  walkFolder(rootNode, !isSubfolderImport);
   return sessions;
 }
 
