@@ -1152,8 +1152,7 @@ async function enrichSessionWithAi(sessionId, apiKey, model) {
   try {
     const items = session.items || [];
     const prompt = buildEnrichmentPrompt(session.title, items);
-    const rawResponse = await callGeminiApi(prompt, apiKey, model);
-    const suggestions = parseEnrichmentResponse(rawResponse);
+    const suggestions = await callGeminiApi(prompt, apiKey, model);
 
     const metadataStore = await getStoredObject(BOOKMARK_METADATA_KEY);
 
@@ -1194,20 +1193,10 @@ function markEnrichmentStatus(sessions, sessionId, status) {
 function buildEnrichmentPrompt(sessionTitle, items) {
   const list = items.map((i) => `- ${i.title}: ${i.url}`).join("\n");
   return `You are categorizing browser bookmarks from a session called "${sessionTitle}".
-For each bookmark, suggest: (1) a specific category (2–3 words max), (2) 2–4 short tags relevant to what the page is actually about.
-Return a JSON array only, no prose: [{"url":"...","category":"...","tags":["...","..."]}]
+For each bookmark, suggest a specific category (2-3 words max) and 2-4 short tags relevant to what the page is actually for.
 
 Bookmarks:
 ${list}`;
-}
-
-function parseEnrichmentResponse(raw) {
-  try {
-    const match = raw.match(/\[[\s\S]*\]/);
-    return match ? JSON.parse(match[0]) : [];
-  } catch (_e) {
-    return [];
-  }
 }
 
 async function retryAiEnrichment(sessionId) {
@@ -1309,19 +1298,44 @@ async function syncNow() {
 }
 
 async function callGeminiApi(prompt, apiKey, model) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  const response = await fetch(url, {
+  const endpoint =
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+
+  const responseSchema = {
+    type: "ARRAY",
+    items: {
+      type: "OBJECT",
+      required: ["url", "category", "tags"],
+      properties: {
+        url: { type: "STRING" },
+        category: { type: "STRING" },
+        tags: { type: "ARRAY", items: { type: "STRING" } }
+      }
+    }
+  };
+
+  const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey
+    },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }]
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "application/json",
+        responseSchema
+      }
     })
   });
 
   if (!response.ok) {
-    throw new Error(`Gemini API error: ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`Gemini API ${response.status}: ${errorText.slice(0, 200)}`);
   }
 
   const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+  return JSON.parse(text);
 }
