@@ -61,6 +61,8 @@ const state = {
   activeView: "draft",          // "draft" | "library"
   importOpen: false,
   importRunning: false,
+  importEnrichmentTotal: 0,
+  importEnrichmentDone: 0,
   syncRunning: false
 };
 
@@ -132,8 +134,26 @@ async function init() {
 
   // Re-render library when background AI enrichment updates sessions
   extensionApi.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes[SAVED_SESSIONS_KEY]) {
-      loadRecentArchives().then(() => renderArchiveExplorer());
+    if (area !== "local") return;
+    if (changes[SAVED_SESSIONS_KEY]) {
+      loadRecentArchives().then(() => {
+        renderArchiveExplorer();
+        // Advance import AI progress bar if enrichment is running
+        if (state.importEnrichmentTotal > 0) {
+          const sessions = state.recentArchives || [];
+          const doneCount = sessions.filter(
+            (s) => s.aiEnrichmentStatus === "done" || s.aiEnrichmentStatus === "failed"
+          ).length;
+          state.importEnrichmentDone = doneCount;
+          const pct = 40 + Math.round((doneCount / state.importEnrichmentTotal) * 60);
+          elements.importProgressFill.style.width = `${Math.min(pct, 100)}%`;
+          elements.importProgressAi.textContent = `${doneCount} / ${state.importEnrichmentTotal}`;
+          if (doneCount >= state.importEnrichmentTotal) {
+            elements.importProgressAi.dataset.done = "true";
+            state.importEnrichmentTotal = 0;
+          }
+        }
+      });
     }
   });
 
@@ -3177,7 +3197,12 @@ async function handleImportRun() {
       elements.importAiRow.hidden = false;
       elements.importAiCurrent.textContent = "sessions";
       elements.importProgressAi.textContent = `0 / ${importedCount}`;
-      // Progress updates come via storage.onChanged → loadRecentArchives
+      state.importEnrichmentTotal = importedCount;
+      state.importEnrichmentDone = 0;
+      // Progress bar stays at 40% — onChanged listener advances it as sessions complete
+    } else {
+      elements.importProgressFill.style.width = "100%";
+      elements.importProgressSessions.dataset.done = "true";
     }
 
     await loadRecentArchives();
