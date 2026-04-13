@@ -386,6 +386,13 @@ async function loadRecentArchives() {
       .map((session) => session.id)
       .filter((id) => !previouslyExpanded.has(id));
   }
+
+  const validSessionIds = new Set(state.recentArchives.map((session) => session.id));
+  for (const id of state.selectedSessionIds) {
+    if (!validSessionIds.has(id)) {
+      state.selectedSessionIds.delete(id);
+    }
+  }
 }
 
 async function restoreLibraryWidth() {
