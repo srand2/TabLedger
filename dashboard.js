@@ -63,7 +63,8 @@ const state = {
   importRunning: false,
   importEnrichmentTotal: 0,
   importEnrichmentDone: 0,
-  syncRunning: false
+  syncRunning: false,
+  libraryInitialized: false
 };
 
 const elements = {
@@ -319,10 +320,19 @@ async function loadRecentArchives() {
       : {};
 
   state.recentArchives = buildArchiveSessions(savedSessions, metadataStore);
-  const validSessionIds = new Set(state.recentArchives.map((session) => session.id));
-  state.collapsedArchiveSessions = state.collapsedArchiveSessions.filter((sessionId) =>
-    validSessionIds.has(sessionId)
-  );
+  if (!state.libraryInitialized) {
+    state.collapsedArchiveSessions = state.recentArchives.map((session) => session.id);
+    state.libraryInitialized = true;
+  } else {
+    const previouslyExpanded = new Set(
+      state.recentArchives
+        .map((session) => session.id)
+        .filter((id) => !state.collapsedArchiveSessions.includes(id))
+    );
+    state.collapsedArchiveSessions = state.recentArchives
+      .map((session) => session.id)
+      .filter((id) => !previouslyExpanded.has(id));
+  }
 }
 
 async function restoreLibraryWidth() {
