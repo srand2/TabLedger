@@ -1297,22 +1297,22 @@ async function syncNow() {
   return { pushed, pulled };
 }
 
+const ENRICHMENT_RESPONSE_SCHEMA = {
+  type: "ARRAY",
+  items: {
+    type: "OBJECT",
+    required: ["url", "category", "tags"],
+    properties: {
+      url: { type: "STRING" },
+      category: { type: "STRING" },
+      tags: { type: "ARRAY", items: { type: "STRING" } }
+    }
+  }
+};
+
 async function callGeminiApi(prompt, apiKey, model) {
   const endpoint =
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-
-  const responseSchema = {
-    type: "ARRAY",
-    items: {
-      type: "OBJECT",
-      required: ["url", "category", "tags"],
-      properties: {
-        url: { type: "STRING" },
-        category: { type: "STRING" },
-        tags: { type: "ARRAY", items: { type: "STRING" } }
-      }
-    }
-  };
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -1325,7 +1325,7 @@ async function callGeminiApi(prompt, apiKey, model) {
       generationConfig: {
         temperature: 0.2,
         responseMimeType: "application/json",
-        responseSchema
+        responseSchema: ENRICHMENT_RESPONSE_SCHEMA
       }
     })
   });
@@ -1336,6 +1336,14 @@ async function callGeminiApi(prompt, apiKey, model) {
   }
 
   const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-  return JSON.parse(text);
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts) || parts.length === 0) {
+    throw new Error("Gemini returned an unexpected response for enrichment.");
+  }
+  const text = parts.map((p) => p.text || "").join("").trim() || "[]";
+  try {
+    return JSON.parse(text);
+  } catch (_e) {
+    throw new Error("Gemini returned non-JSON output for enrichment.");
+  }
 }
