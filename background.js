@@ -24,7 +24,7 @@ extensionApi.runtime.onInstalled.addListener(() => {
 
 extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "open-dashboard") {
-    openDashboard(message.scope)
+    openDashboard(normalizeDashboardIntent(message.payload ?? message.scope))
       .then(() => sendResponse({ ok: true }))
       .catch((error) => {
         console.error("Failed to open dashboard", error);
@@ -174,10 +174,32 @@ extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
-async function openDashboard(scope) {
+function normalizeDashboardIntent(value) {
+  if (typeof value === "string") {
+    return {
+      capture: value
+    };
+  }
+
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return {
+    capture: typeof value.capture === "string" ? value.capture : null,
+    view: typeof value.view === "string" ? value.view : null
+  };
+}
+
+async function openDashboard(intent = {}) {
   const targetUrl = new URL(extensionApi.runtime.getURL("dashboard.html"));
-  if (scope) {
-    targetUrl.searchParams.set("capture", scope);
+
+  if (intent.capture) {
+    targetUrl.searchParams.set("capture", intent.capture);
+  }
+
+  if (intent.view) {
+    targetUrl.searchParams.set("view", intent.view);
   }
 
   await extensionApi.tabs.create({ url: targetUrl.toString() });
@@ -715,6 +737,39 @@ async function updateArchiveCategory(payload) {
   };
 }
 
+const TRACKING_PARAMS = new Set([
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+  "fbclid", "gclid", "_ga", "_gid", "ref", "mc_cid", "mc_eid"
+]);
+
+function normalizeArchiveUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return raw.toLowerCase();
+  }
+
+  // Remove tracking query parameters
+  for (const key of [...parsed.searchParams.keys()]) {
+    if (TRACKING_PARAMS.has(key)) {
+      parsed.searchParams.delete(key);
+    }
+  }
+  // Sort remaining params so ?a=1&b=2 and ?b=2&a=1 produce the same key
+  parsed.searchParams.sort();
+
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  // Strip trailing slash from path (root "/" becomes empty string)
+  const path = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/$/, "");
+  const query = parsed.search; // e.g. "?q=hello" or "" — fragment already absent
+
+  return `${host}${path}${query}`;
+}
+
 function getUniqueUrls(urls) {
   if (!Array.isArray(urls)) {
     return [];
@@ -724,13 +779,12 @@ function getUniqueUrls(urls) {
   const uniqueUrls = [];
 
   for (const url of urls) {
-    const normalized = String(url || "").trim();
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-
-    seen.add(normalized);
-    uniqueUrls.push(normalized);
+    const raw = String(url || "").trim();
+    if (!raw) continue;
+    const key = normalizeArchiveUrl(raw);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueUrls.push(raw); // push original, not normalized key
   }
 
   return uniqueUrls;
@@ -796,9 +850,6 @@ function buildExistingLibraryUrlSet(savedSessions, metadataStore) {
   return urls;
 }
 
-function normalizeArchiveUrl(url) {
-  return String(url || "").trim();
-}
 
 function getArchiveMetadataEntry(metadataStore, sessionId, bookmarkId, url, title) {
   if (bookmarkId && metadataStore[bookmarkId]) {
