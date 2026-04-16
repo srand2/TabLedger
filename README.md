@@ -19,7 +19,7 @@
 
 ### 1 — Capture
 
-Click **Capture & Review** in the popup or **Capture All Windows** in the dashboard. TabLedger scans every open browser window and builds a draft workspace.
+Click **Capture & Review** in the popup or **Capture All Windows** in the dashboard. TabLedger scans every open browser window, skips unsupported browser pages, and builds a draft workspace.
 
 ### 2 — Review
 
@@ -30,7 +30,7 @@ Tabs appear grouped by category. Click any row to expand its fields and edit `Ca
 ![Tab detail](media/tab-detail.png)
 
 - Use **Fill with AI** on a single tab or **Use AI** for the whole draft
-- Rename a category by typing in the name field — **✓** saves, **✕** removes the category from the draft
+- Rename a category by typing in the name field — **Save** confirms the rename, **Delete Category** removes that group from the draft
 - **Expand All / Collapse All** to manage large sessions
 
 ### 3 — Save
@@ -50,7 +50,8 @@ Search and reopen any saved session at any time.
 - Filter by title, URL, category, tag, description, or summary
 - Open all matching tabs at once
 - Edit or delete individual saved tabs
-- Accessible from the **Library** tab at any point during the workflow
+- Open it directly from the popup with **Open Library**
+- Switch between **Draft** and **Library** from the workspace toggle at any point
 
 ---
 
@@ -96,6 +97,18 @@ TabLedger has no servers and collects no data. Everything stays in your browser:
 - Tab data → saved to your Chrome bookmarks and `chrome.storage.local`
 - Settings → stored in `chrome.storage.local`
 - AI fill → only tab title, URL, and hostname are sent directly from your browser to Google Gemini using **your own API key** — nothing goes to any TabLedger server
+
+---
+
+## Permissions
+
+TabLedger requests the smallest set of Chrome permissions needed for its current feature set:
+
+- `tabs` — required during capture to read each open tab's `url`, `title`, and `favIconUrl`, which TabLedger uses to build the draft, skip unsupported pages, group tabs, and show titles, links, summaries, tags, and favicons
+- `bookmarks` — required to save sessions into the Browsing Library and manage saved entries
+- `storage` — required to persist drafts, saved session metadata, and local settings
+
+Without `tabs`, the capture flow cannot reliably build a full draft from all open windows because Chrome does not expose those sensitive tab fields to extensions by default.
 
 ---
 
