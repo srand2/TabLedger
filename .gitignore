@@ -2,6 +2,7 @@
 
 # Local tooling and planning artifacts
 .claude/
+.codex
 .superpowers/
 CLAUDE.md
 IMPLEMENTATION_PLAN.md
@@ -9,6 +10,7 @@ IMPLEMENTATION_PLAN.md
 # Non-core support assets
 docs/
 media/
+output/
 
 # OS noise
 .DS_Store
