@@ -70,6 +70,7 @@ const state = {
   importRunning: false,
   importEnrichmentTotal: 0,
   importEnrichmentDone: 0,
+  importEnrichmentSessionIds: [],
   syncRunning: false,
   libraryInitialized: false,
   selectedSessionIds: new Set(),
@@ -176,7 +177,11 @@ async function init() {
         // Advance import AI progress bar if enrichment is running
         if (state.importEnrichmentTotal > 0) {
           const sessions = state.recentArchives || [];
-          const doneCount = sessions.filter(
+          const trackedSessionIds = new Set(state.importEnrichmentSessionIds.map(String));
+          const sessionsToTrack = trackedSessionIds.size
+            ? sessions.filter((session) => trackedSessionIds.has(String(session.id)))
+            : sessions.filter((session) => session.aiEnrichmentStatus === "pending");
+          const doneCount = sessionsToTrack.filter(
             (s) => s.aiEnrichmentStatus === "done" || s.aiEnrichmentStatus === "failed"
           ).length;
           state.importEnrichmentDone = doneCount;
@@ -186,6 +191,7 @@ async function init() {
           if (doneCount >= state.importEnrichmentTotal) {
             elements.importProgressAi.dataset.done = "true";
             state.importEnrichmentTotal = 0;
+            state.importEnrichmentSessionIds = [];
           }
         }
       });
@@ -2371,6 +2377,7 @@ async function persistDraft() {
 }
 
 async function persistSettings() {
+  state.settings = normalizeSettings(state.settings);
   await extensionApi.storage.local.set({
     [SETTINGS_KEY]: state.settings
   });
@@ -2738,6 +2745,8 @@ function normalizeArchiveSession(session) {
     ? session.items.map(normalizeArchiveItem).filter(Boolean)
     : [];
   const categoryMeta = normalizeCategoryMeta(session.categoryMeta, session.categories, items);
+  const aiEnrichmentStatus =
+    typeof session.aiEnrichmentStatus === "string" ? session.aiEnrichmentStatus : null;
 
   return {
     id: session.id || makeId("archive"),
@@ -2746,7 +2755,8 @@ function normalizeArchiveSession(session) {
     items: sortArchiveItems(items),
     totalItemCount: items.length,
     categoryMeta,
-    categories: buildSessionCategories(items, categoryMeta)
+    categories: buildSessionCategories(items, categoryMeta),
+    aiEnrichmentStatus
   };
 }
 
@@ -4140,8 +4150,13 @@ async function handleImportRun() {
   elements.importProgress.hidden = false;
   setImportProgressSessions("…", false);
   elements.importProgressFill.style.width = "10%";
+  elements.importProgressAi.dataset.done = "false";
 
   try {
+    if (useAi) {
+      await persistSettings();
+    }
+
     const response = await extensionApi.runtime.sendMessage({
       type: "import-bookmarks",
       payload: { folderId, useAi }
@@ -4151,7 +4166,7 @@ async function handleImportRun() {
       throw new Error(response?.error || "Import failed");
     }
 
-    const { importedCount, totalBookmarks } = response.result;
+    const { importedCount, totalBookmarks, sessionIds = [] } = response.result;
     setImportProgressSessions(`${importedCount} sessions, ${totalBookmarks} tabs`, true);
     elements.importProgressFill.style.width = useAi ? "40%" : "100%";
 
@@ -4161,10 +4176,14 @@ async function handleImportRun() {
       elements.importProgressAi.textContent = `0 / ${importedCount}`;
       state.importEnrichmentTotal = importedCount;
       state.importEnrichmentDone = 0;
+      state.importEnrichmentSessionIds = Array.isArray(sessionIds)
+        ? sessionIds.map((id) => String(id))
+        : [];
       // Progress bar stays at 40% — onChanged listener advances it as sessions complete
     } else {
       elements.importProgressFill.style.width = "100%";
       elements.importProgressSessions.dataset.done = "true";
+      state.importEnrichmentSessionIds = [];
     }
 
     await loadRecentArchives();

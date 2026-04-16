@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
   dedupeWithinSession: false,
   dedupeAcrossSessions: false
 };
+const AI_ENRICHMENT_REQUEST_TIMEOUT_MS = 45000;
 let aiEnrichmentDrainPromise = null;
 
 // Resume any AI enrichment that was interrupted by browser restart
@@ -1233,7 +1234,8 @@ async function importBookmarksAsSession({ folderId = null, useAi = false } = {})
 
   return {
     importedCount: sessions.length,
-    totalBookmarks: sessions.reduce((sum, s) => sum + s.items.length, 0)
+    totalBookmarks: sessions.reduce((sum, s) => sum + s.items.length, 0),
+    sessionIds: newSessionIds.map((id) => String(id))
   };
 }
 
@@ -1514,37 +1516,49 @@ const ENRICHMENT_RESPONSE_SCHEMA = {
 async function callGeminiApi(prompt, apiKey, model) {
   const endpoint =
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AI_ENRICHMENT_REQUEST_TIMEOUT_MS);
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey
-    },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.2,
-        responseMimeType: "application/json",
-        responseSchema: ENRICHMENT_RESPONSE_SCHEMA
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API ${response.status}: ${errorText.slice(0, 200)}`);
-  }
-
-  const data = await response.json();
-  const parts = data?.candidates?.[0]?.content?.parts;
-  if (!Array.isArray(parts) || parts.length === 0) {
-    throw new Error("Gemini returned an unexpected response for enrichment.");
-  }
-  const text = parts.map((p) => p.text || "").join("").trim() || "[]";
   try {
-    return JSON.parse(text);
-  } catch (_e) {
-    throw new Error("Gemini returned non-JSON output for enrichment.");
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json",
+          responseSchema: ENRICHMENT_RESPONSE_SCHEMA
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API ${response.status}: ${errorText.slice(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const parts = data?.candidates?.[0]?.content?.parts;
+    if (!Array.isArray(parts) || parts.length === 0) {
+      throw new Error("Gemini returned an unexpected response for enrichment.");
+    }
+    const text = parts.map((p) => p.text || "").join("").trim() || "[]";
+    try {
+      return JSON.parse(text);
+    } catch (_e) {
+      throw new Error("Gemini returned non-JSON output for enrichment.");
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Gemini enrichment timed out. Please try again.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
