@@ -460,6 +460,16 @@ async function loadRecentArchives() {
       state.selectedArchiveItemKeys.delete(itemKey);
     }
   }
+
+  if (state.recentArchives.some((session) => session.aiEnrichmentStatus === "pending")) {
+    requestAiEnrichmentQueueDrain();
+  }
+}
+
+function requestAiEnrichmentQueueDrain() {
+  void extensionApi.runtime
+    .sendMessage({ type: "resume-ai-enrichment-queue" })
+    .catch(() => {});
 }
 
 async function restoreSettings() {

@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
   dedupeWithinSession: false,
   dedupeAcrossSessions: false
 };
+let aiEnrichmentDrainPromise = null;
 
 // Resume any AI enrichment that was interrupted by browser restart
 extensionApi.runtime.onStartup.addListener(() => {
@@ -146,6 +147,16 @@ extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .then((result) => sendResponse({ ok: true, result }))
       .catch((error) => {
         console.error("Failed to retry AI enrichment", error);
+        sendResponse({ ok: false, error: error.message });
+      });
+    return true;
+  }
+
+  if (message?.type === "resume-ai-enrichment-queue") {
+    drainAiEnrichmentQueue()
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => {
+        console.error("Failed to resume AI enrichment queue", error);
         sendResponse({ ok: false, error: error.message });
       });
     return true;
@@ -1291,21 +1302,40 @@ function safeHostname(url) {
 // ── AI enrichment queue ───────────────────────────────────────────────────────
 
 async function drainAiEnrichmentQueue() {
-  const queue = await getStoredArray(AI_ENRICHMENT_QUEUE_KEY);
-  if (!queue.length) return;
+  if (aiEnrichmentDrainPromise) {
+    return aiEnrichmentDrainPromise;
+  }
 
-  const settings = await extensionApi.storage.local.get(SETTINGS_KEY);
-  const apiKey = settings[SETTINGS_KEY]?.geminiApiKey;
-  const model = settings[SETTINGS_KEY]?.geminiModel || "gemini-2.5-flash";
+  aiEnrichmentDrainPromise = (async () => {
+    let processedCount = 0;
 
-  for (const sessionId of queue) {
-    await enrichSessionWithAi(sessionId, apiKey, model);
+    while (true) {
+      const queue = await getStoredArray(AI_ENRICHMENT_QUEUE_KEY);
+      if (!queue.length) {
+        return { processedCount };
+      }
 
-    // Remove processed ID from queue
-    const remaining = await getStoredArray(AI_ENRICHMENT_QUEUE_KEY);
-    await extensionApi.storage.local.set({
-      [AI_ENRICHMENT_QUEUE_KEY]: remaining.filter((id) => id !== sessionId)
-    });
+      const settings = await extensionApi.storage.local.get(SETTINGS_KEY);
+      const apiKey = settings[SETTINGS_KEY]?.geminiApiKey;
+      const model = settings[SETTINGS_KEY]?.geminiModel || "gemini-2.5-flash";
+      const sessionId = queue[0];
+
+      await enrichSessionWithAi(sessionId, apiKey, model);
+
+      // Remove the processed session even when enrichment fails so the queue can advance.
+      const remaining = await getStoredArray(AI_ENRICHMENT_QUEUE_KEY);
+      await extensionApi.storage.local.set({
+        [AI_ENRICHMENT_QUEUE_KEY]: remaining.filter((id) => String(id) !== String(sessionId))
+      });
+
+      processedCount += 1;
+    }
+  })();
+
+  try {
+    return await aiEnrichmentDrainPromise;
+  } finally {
+    aiEnrichmentDrainPromise = null;
   }
 }
 
