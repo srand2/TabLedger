@@ -12,6 +12,12 @@ document.getElementById("open-dashboard").addEventListener("click", () => {
   });
 });
 
+document.getElementById("open-workspace").addEventListener("click", () => {
+  openDashboard({
+    view: "workspace"
+  });
+});
+
 async function openDashboard(intent) {
   const response = await extensionApi.runtime.sendMessage({
     type: "open-dashboard",

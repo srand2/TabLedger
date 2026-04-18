@@ -49,6 +49,21 @@
                 </span>
               </label>
               <div class="settings-section">
+                <h3>Obsidian</h3>
+                <div class="settings-api-block">
+                  <label class="field">
+                    <span>Vault Name</span>
+                    <input
+                      id="obsidian-vault"
+                      type="text"
+                      placeholder="My Vault"
+                      spellcheck="false"
+                    />
+                    <small>The name of your Obsidian vault (required for Workspace export).</small>
+                  </label>
+                </div>
+              </div>
+              <div class="settings-section">
                 <h3>AI</h3>
                 <div class="settings-api-block">
                   <label class="field">
@@ -200,6 +215,17 @@
         >
           Library
         </button>
+        <button
+          id="view-tab-workspace"
+          class="view-tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="workspace-pane"
+          aria-label="Switch to Workspace view"
+          type="button"
+        >
+          Workspace
+        </button>
       </div>
 
       <section id="layout-panel" class="panel layout-panel">
@@ -249,6 +275,14 @@
                 <svg viewBox="0 0 16 16" fill="currentColor" class="icon tab-ai-icon" aria-hidden="true"><path d="M8 0L9.5 6.5L16 8L9.5 9.5L8 16L6.5 9.5L0 8L6.5 6.5Z"/></svg>
                 <span>Use AI</span>
               </button>
+              <button id="library-bulk-ai-pause" class="ghost-button small-button" type="button" hidden>
+                <svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M5.5 3.5A1.5 1.5 0 017 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5zm5 0A1.5 1.5 0 0112 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5z"/></svg>
+                Pause
+              </button>
+              <button id="library-bulk-ai-stop" class="ghost-button small-button" type="button" hidden>
+                <svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z"/></svg>
+                Stop
+              </button>
               <button id="sync-now" class="ghost-button small-button sync-button" type="button" title="Sync sessions across devices">
                 <svg viewBox="0 0 16 16" fill="currentColor" class="icon sync-icon" aria-hidden="true"><path fill-rule="evenodd" d="M1 11.5a.5.5 0 00.5.5h11.793l-3.147 3.146a.5.5 0 00.708.708l4-4a.5.5 0 000-.708l-4-4a.5.5 0 00-.708.708L13.293 11H1.5a.5.5 0 00-.5.5zm14-7a.5.5 0 01-.5.5H2.707l3.147 3.146a.5.5 0 11-.708.708l-4-4a.5.5 0 010-.708l4-4a.5.5 0 11.708.708L2.707 4H14.5a.5.5 0 01.5.5z"/></svg>
                 <span>Sync</span>
@@ -287,7 +321,7 @@
               <input type="checkbox" id="import-use-ai" checked />
               <span>
                 <strong>Enhance with AI</strong>
-                <small>Auto-categorize &amp; tag each tab with Gemini</small>
+                <small>Auto-categorize, tag, and summarize each tab with Gemini</small>
               </span>
             </label>
 
@@ -308,6 +342,16 @@
               </div>
               <div class="import-progress-track">
                 <div id="import-progress-fill" class="import-progress-fill"></div>
+              </div>
+              <div id="import-progress-actions" class="import-progress-actions" hidden>
+                <button id="import-ai-pause" class="ghost-button small-button" type="button">
+                  <svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M5.5 3.5A1.5 1.5 0 017 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5zm5 0A1.5 1.5 0 0112 5v6a1.5 1.5 0 01-3 0V5a1.5 1.5 0 011.5-1.5z"/></svg>
+                  Pause
+                </button>
+                <button id="import-ai-stop" class="ghost-button small-button" type="button">
+                  <svg viewBox="0 0 16 16" fill="currentColor" class="icon" aria-hidden="true"><path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z"/></svg>
+                  Stop
+                </button>
               </div>
               <p class="import-progress-note">Sessions are usable now — AI keeps improving them in the background</p>
             </div>
@@ -350,8 +394,109 @@
             <button id="bulk-delete-cancel" class="ghost-button small-button" type="button">Clear selection</button>
           </div>
         </aside>
+
+        <div id="workspace-pane" class="workspace-column">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Workspace</p>
+              <h2 tabindex="-1">Project Architect</h2>
+            </div>
+            <div class="workspace-heading-actions">
+              <div class="workspace-export-group" id="workspace-export-group" hidden>
+                <span id="workspace-export-status" class="workspace-export-status"></span>
+                <button id="workspace-export-obsidian" class="ghost-button small-button" type="button">
+                  Export to Obsidian
+                </button>
+              </div>
+              <button id="workspace-new-project" class="ghost-button small-button" type="button" hidden title="Clear this project and start a new topic search">
+                New Search
+              </button>
+            </div>
+          </div>
+
+          <div id="workspace-search-zone" class="workspace-search-zone">
+            <label class="field">
+              <span>Focus Area</span>
+              <input
+                id="workspace-topic"
+                type="text"
+                placeholder="e.g. AI development with Python, React performance, product management"
+              />
+            </label>
+            <div class="workspace-search-row">
+              <button id="workspace-search-btn" class="primary-button" type="button">
+                Search Library
+              </button>
+              <span class="workspace-coming-soon-chip" tabindex="0"
+                title="Currently, Workspace can only analyse public web pages (articles, docs, blog posts, GitHub, PDFs). YouTube videos and social media posts require different handling — video transcript extraction for YouTube and authenticated access for social sites. We're working on a reliable solution for both.">
+                <span class="workspace-coming-soon-dot" aria-hidden="true">•</span>
+                YouTube &amp; social media coming soon
+              </span>
+            </div>
+            <p id="workspace-status" class="workspace-status" aria-live="polite"></p>
+          </div>
+
+          <div id="workspace-results-zone" class="workspace-results-zone" hidden>
+            <div class="workspace-results-header">
+              <p class="eyebrow">Matched Sources</p>
+              <span id="workspace-results-count" class="category-pill item-count-pill"></span>
+            </div>
+            <p class="workspace-results-hint">Top matches from your library. Deselect any to exclude before generating.</p>
+            <div class="workspace-generate-row">
+              <button id="workspace-generate-btn" class="primary-button" type="button">
+                <svg viewBox="0 0 16 16" fill="currentColor" class="icon tab-ai-icon" aria-hidden="true"><path d="M8 0L9.5 6.5L16 8L9.5 9.5L8 16L6.5 9.5L0 8L6.5 6.5Z"/></svg>
+                Generate Project Kit
+              </button>
+            </div>
+            <div id="workspace-results-list" class="workspace-results-list"></div>
+          </div>
+
+          <div id="workspace-project-zone" class="workspace-project-zone" hidden>
+            <div id="workspace-project-content" class="workspace-project-content"></div>
+          </div>
+        </div>
       </section>
     </main>
+
+    <div id="workspace-prompt-modal" class="modal-overlay" hidden>
+      <section
+        class="modal-panel workspace-prompt-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="workspace-prompt-title"
+      >
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Review Prompt</p>
+            <h2 id="workspace-prompt-title">Generate Project Kit</h2>
+          </div>
+          <button
+            id="workspace-prompt-close"
+            class="ghost-button small-button"
+            type="button"
+            aria-label="Close prompt editor"
+          >
+            Close
+          </button>
+        </div>
+        <p id="workspace-prompt-summary" class="workspace-prompt-summary"></p>
+        <label class="field workspace-prompt-field">
+          <span class="workspace-prompt-label">Prompt — edit to customise what the AI produces</span>
+          <textarea
+            id="workspace-prompt-textarea"
+            class="workspace-prompt-textarea"
+            spellcheck="false"
+          ></textarea>
+        </label>
+        <div class="modal-actions">
+          <button id="workspace-prompt-cancel" class="ghost-button" type="button">Cancel</button>
+          <button id="workspace-prompt-confirm" class="primary-button" type="button">
+            <svg viewBox="0 0 16 16" fill="currentColor" class="icon tab-ai-icon" aria-hidden="true"><path d="M8 0L9.5 6.5L16 8L9.5 9.5L8 16L6.5 9.5L0 8L6.5 6.5Z"/></svg>
+            Generate
+          </button>
+        </div>
+      </section>
+    </div>
 
     <div id="ai-selection-modal" class="modal-overlay" hidden>
       <section

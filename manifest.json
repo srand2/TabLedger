@@ -6,10 +6,13 @@
   "permissions": [
     "tabs",
     "bookmarks",
-    "storage"
+    "storage",
+    "clipboardWrite"
   ],
   "host_permissions": [
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "https://www.youtube.com/*",
+    "https://*.youtube.com/*"
   ],
   "icons": {
     "16": "icon-16.png",
